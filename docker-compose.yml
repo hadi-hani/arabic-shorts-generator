@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    container_name: shorts-backend
+    ports:
+      - "3002:3001"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-placeholder}
+      - GOOGLE_TTS_KEY=${GOOGLE_TTS_KEY:-placeholder}
+      - PEXELS_API_KEY=${PEXELS_API_KEY:-placeholder}
+      - PORT=3001
+    volumes:
+      - ./backend/output:/app/output
+      - ./backend/temp:/app/temp
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: shorts-frontend
+    ports:
+      - "8181:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

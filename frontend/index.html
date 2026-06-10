@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Short Video Generator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#07070f;color:#fff;font-family:'Cairo',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px}
+    .wrap{width:100%;max-width:760px}
+    h1{font-size:2.4rem;font-weight:900;text-align:center;margin-bottom:6px;background:linear-gradient(135deg,#6c63ff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .sub{text-align:center;color:#555;margin-bottom:32px;font-size:.95rem}
+    .row{display:flex;gap:10px;margin-bottom:24px}
+    #inp{flex:1;padding:14px 16px;border-radius:12px;border:2px solid #1e1e2e;background:#0e0e1a;color:#fff;font-size:1rem;font-family:'Cairo',sans-serif;outline:none}
+    #inp:focus{border-color:#6c63ff}
+    #btn{padding:14px 24px;border-radius:12px;background:linear-gradient(135deg,#6c63ff,#a855f7);color:#fff;border:none;font-size:1rem;font-family:'Cairo',sans-serif;cursor:pointer;font-weight:700;white-space:nowrap}
+    #btn:disabled{opacity:.4;cursor:not-allowed}
+    #log{background:#0e0e1a;border:1px solid #1e1e2e;border-radius:12px;padding:20px;min-height:60px;margin-bottom:16px;font-size:.9rem;color:#aaa;line-height:1.8;display:none}
+    .box{background:#0e0e1a;border:1px solid #1e1e2e;border-radius:16px;padding:28px;text-align:center}
+    .spin{font-size:2.2rem;animation:spin 1s linear infinite;display:inline-block;margin-bottom:10px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .step{color:#a855f7;font-weight:700;font-size:1rem}
+    .bar{width:100%;height:5px;background:#1a1a2e;border-radius:4px;margin-top:12px;overflow:hidden}
+    .fill{height:100%;background:linear-gradient(90deg,#6c63ff,#a855f7);border-radius:4px;transition:width .6s ease}
+    .ok{font-size:1.3rem;font-weight:900;color:#4ade80;margin-bottom:4px}
+    .ttl{color:#aaa;margin-bottom:14px;font-size:.9rem}
+    video{width:100%;max-width:260px;border-radius:14px;margin:0 auto 14px;display:block;box-shadow:0 0 30px #6c63ff33}
+    #dlbtn{display:inline-flex;align-items:center;gap:8px;padding:11px 26px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border-radius:12px;font-family:'Cairo',sans-serif;font-size:.95rem;font-weight:700;margin-bottom:16px;border:none;cursor:pointer}
+    #dlbtn:disabled{opacity:.5}
+    .tags{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:20px}
+    .tag{background:#13122a;color:#818cf8;padding:4px 12px;border-radius:20px;font-size:.83rem;font-weight:700}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:16px;border-top:1px solid #1a1a2e;padding-top:16px}
+    .card{background:#0a0a14;border:1px solid #1a1a2e;border-radius:10px;overflow:hidden}
+    .card img{width:100%;height:140px;object-fit:cover;display:block}
+    .cb{padding:10px}
+    .cn{font-size:.7rem;color:#444;margin-bottom:3px}
+    .ct{color:#bbb;font-size:.8rem;line-height:1.55;margin-bottom:6px}
+    audio{width:100%;height:28px}
+    .err{background:#150505;border:1px solid #7f1d1d;border-radius:12px;padding:18px;color:#f87171;text-align:center}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎬 Short Video Generator</h1>
+  <p class="sub">أدخل موضوعاً واحصل على فيديو شورت عربي كامل</p>
+  <div class="row">
+    <input id="inp" type="text" placeholder="مثال: فوائد القهوة الصباحية"/>
+    <button id="btn" onclick="generate()">توليد ✨</button>
+  </div>
+  <div id="log"></div>
+  <div id="out"></div>
+</div>
+<script>
+var jobTimer = null;
+var videoUrl = null;
+
+function log(msg) {
+  var el = document.getElementById('log');
+  el.style.display = 'block';
+  el.innerHTML += msg + '<br>';
+}
+
+function generate() {
+  var topic = document.getElementById('inp').value.trim();
+  if (!topic) { alert('أدخل موضوعاً أولاً'); return; }
+  document.getElementById('btn').disabled = true;
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('log').style.display = 'block';
+  videoUrl = null;
+  log('▶️ إرسال الطلب...');
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/generate', true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      var data = JSON.parse(xhr.responseText);
+      log('✅ تم الإرسال - JobID: ' + data.jobId);
+      showProgress('🤖 Gemini يولّد السكريبت...', 15);
+      poll(data.jobId);
+    } else {
+      log('❌ خطأ HTTP: ' + xhr.status + ' - ' + xhr.responseText);
+      document.getElementById('btn').disabled = false;
+    }
+  };
+  xhr.onerror = function() {
+    log('❌ خطأ في الشبكة - تأكد من الاتصال');
+    document.getElementById('btn').disabled = false;
+  };
+  xhr.send(JSON.stringify({ topic: topic }));
+}
+
+function poll(jobId) {
+  if (jobTimer) clearInterval(jobTimer);
+  var stepIdx = 0;
+  var steps = [
+    '🤖 Gemini يولّد السكريبت...',
+    '🖼️ جلب صور الخلفية...',
+    '🔊 توليد الصوت بالعربية...',
+    '🎥 FFmpeg يبني الفيديو...'
+  ];
+  var pcts = [15, 35, 60, 85];
+  jobTimer = setInterval(function() {
+    var xhr2 = new XMLHttpRequest();
+    xhr2.open('GET', '/api/status/' + jobId, true);
+    xhr2.onload = function() {
+      if (xhr2.status !== 200) return;
+      var d = JSON.parse(xhr2.responseText);
+      if (d.status === 'processing') {
+        stepIdx = Math.min(stepIdx + 1, steps.length - 1);
+        showProgress(d.step || steps[stepIdx], pcts[stepIdx] || 70);
+      } else if (d.status === 'done') {
+        clearInterval(jobTimer);
+        videoUrl = d.videoUrl;
+        log('🎉 اكتمل!');
+        showResult(d);
+        document.getElementById('btn').disabled = false;
+      } else if (d.status === 'error') {
+        clearInterval(jobTimer);
+        log('❌ ' + d.message);
+        document.getElementById('out').innerHTML = '<div class="err">❌ ' + d.message + '</div>';
+        document.getElementById('btn').disabled = false;
+      }
+    };
+    xhr2.send();
+  }, 3000);
+}
+
+function showProgress(step, pct) {
+  document.getElementById('out').innerHTML =
+    '<div class="box"><div class="spin">⚙️</div><p class="step">' + step + '</p>' +
+    '<div class="bar"><div class="fill" style="width:' + pct + '%"></div></div></div>';
+}
+
+function dlVideo() {
+  if (!videoUrl) return;
+  var btn = document.getElementById('dlbtn');
+  btn.disabled = true; btn.textContent = '⏳ جاري التحميل...';
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', videoUrl, true);
+  xhr.responseType = 'blob';
+  xhr.onload = function() {
+    var url = URL.createObjectURL(xhr.response);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'short.mp4';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); document.body.removeChild(a); }, 2000);
+    btn.disabled = false; btn.innerHTML = '⬇️ تحميل MP4';
+  };
+  xhr.onerror = function() { btn.disabled = false; btn.innerHTML = '⬇️ تحميل MP4'; };
+  xhr.send();
+}
+
+function showResult(d) {
+  var scenes = (d.scenes || []).map(function(s, i) {
+    return '<div class="card">' +
+      (s.imageUrl ? '<img src="' + s.imageUrl + '" loading="lazy"/>' : '') +
+      '<div class="cb"><div class="cn">مشهد ' + (i+1) + ' • ' + (s.duration||'?') + 'ث</div>' +
+      '<div class="ct">' + (s.narration||'') + '</div>' +
+      (s.audioUrl ? '<audio controls src="' + s.audioUrl + '"></audio>' : '') +
+      '</div></div>';
+  }).join('');
+  var tags = (d.hashtags || []).map(function(h) {
+    return '<span class="tag">' + h + '</span>';
+  }).join('');
+  document.getElementById('out').innerHTML =
+    '<div class="box">' +
+    '<div class="ok">✅ الفيديو جاهز!</div>' +
+    '<div class="ttl">' + (d.title||'') + '</div>' +
+    '<video src="' + d.videoUrl + '" controls playsinline></video><br/>' +
+    '<button id="dlbtn" onclick="dlVideo()">⬇️ تحميل MP4</button>' +
+    '<div class="tags">' + tags + '</div>' +
+    '<div class="grid">' + scenes + '</div>' +
+    '</div>';
+}
+
+document.getElementById('inp').onkeydown = function(e) {
+  if (e.key === 'Enter') generate();
+};
+</script>
+</body>
+</html>
