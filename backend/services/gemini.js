@@ -22,7 +22,9 @@ Create 4-5 scenes. Keep narration in Arabic.`;
 
   const response = await axios.post(
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
-    { contents: [{ parts: [{ text: prompt }] }] },
+    {
+      contents: [{ parts: [{ text: prompt }] }]
+    },
     {
       headers: {
         "x-goog-api-key": process.env.GEMINI_API_KEY,

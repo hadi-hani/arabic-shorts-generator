@@ -47,16 +47,15 @@ function wrapText(text, maxChars = 24) {
 
 // Ken Burns: use duration*1.3 safety margin so animation never freezes before audio ends
 function getKenBurnsFilter(type, duration, fps = 25) {
-  // Add 30% extra frames so zoom never reaches its end value before audio finishes
   const totalFrames = Math.ceil(duration * fps * 1.3);
   switch (type % 4) {
-    case 0: // zoom in - slow and continuous
+    case 0:
       return `scale=2700:4800,zoompan=z='min(zoom+0.0008,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${totalFrames}:s=1080x1920:fps=${fps}`;
-    case 1: // zoom out - starts at 1.25 goes to 1.001
+    case 1:
       return `scale=2700:4800,zoompan=z='if(lte(zoom,1.0),1.25,max(1.001,zoom-0.0008))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${totalFrames}:s=1080x1920:fps=${fps}`;
-    case 2: // pan right - constant zoom + slow pan
+    case 2:
       return `scale=2700:4800,zoompan=z='1.12':x='min(iw-(iw/zoom),(on/${totalFrames})*(iw-(iw/zoom)))':y='ih/2-(ih/zoom/2)':d=${totalFrames}:s=1080x1920:fps=${fps}`;
-    case 3: // pan left - constant zoom + slow pan reversed
+    case 3:
       return `scale=2700:4800,zoompan=z='1.12':x='max(0,(iw-(iw/zoom))*(1-on/${totalFrames}))':y='ih/2-(ih/zoom/2)':d=${totalFrames}:s=1080x1920:fps=${fps}`;
   }
 }
@@ -120,7 +119,6 @@ async function renderVideo({ script, imageUrls, audioPaths, jobId }) {
   const fontFile = "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf";
   const FPS      = 25;
 
-  // Parallel rendering of all scenes simultaneously
   console.log(`⏱️ Rendering ${scenes.length} scenes in parallel...`);
   const startTime = Date.now();
 
@@ -135,7 +133,6 @@ async function renderVideo({ script, imageUrls, audioPaths, jobId }) {
 
   console.log(`⏱️ Scenes done in ${((Date.now()-startTime)/1000).toFixed(1)}s`);
 
-  // Concat in correct order - use -c copy to skip re-encoding
   const concatList  = path.join(workDir, "concat.txt");
   fs.writeFileSync(concatList, segmentPaths.map(p => `file '${p}'`).join("\n"));
 
