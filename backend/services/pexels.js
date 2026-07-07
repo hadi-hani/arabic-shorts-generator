@@ -1,29 +1,50 @@
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
-async function fetchBackgroundImage(query) {
+// Cloudflare Workers AI — Image Generation (flux-1-schnell or dreamshaper)
+// Docs: https://developers.cloudflare.com/workers-ai/models/flux-1-schnell/
+const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
+const CF_API_TOKEN  = process.env.CF_API_TOKEN;
+const CF_MODEL      = process.env.CF_IMAGE_MODEL || "@cf/black-forest-labs/flux-1-schnell";
+
+async function fetchBackgroundImage(query, jobId, sceneId) {
   try {
-    const response = await axios.get("https://api.pexels.com/v1/search", {
-      params: { query, per_page: 5, orientation: "portrait" },
-      headers: { Authorization: process.env.PEXELS_API_KEY }
-    });
-    const photos = response.data.photos;
-    if (!photos || photos.length === 0) return null;
-    const photo = photos[Math.floor(Math.random() * photos.length)];
-    return photo.src.portrait || photo.src.large;
+    // Build a prompt suitable for portrait background
+    const prompt = `cinematic portrait background, ${query}, vertical 9:16 aspect ratio, high quality, no text, no people`;
+
+    const response = await axios.post(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/${CF_MODEL}`,
+      { prompt, num_steps: 4 },
+      {
+        headers: {
+          Authorization: `Bearer ${CF_API_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        responseType: "arraybuffer"
+      }
+    );
+
+    // Save image locally and return file path
+    const imgDir = path.join(__dirname, `../temp/${jobId}/images`);
+    fs.mkdirSync(imgDir, { recursive: true });
+    const imgPath = path.join(imgDir, `scene_${sceneId}.png`);
+    fs.writeFileSync(imgPath, Buffer.from(response.data));
+    return imgPath;
   } catch (e) {
-    console.error("Pexels image error:", e.message);
+    console.error("Cloudflare image error:", e.message);
     return null;
   }
 }
 
-async function fetchAllImages(scenes) {
-  const imageUrls = [];
+async function fetchAllImages(scenes, jobId) {
+  const imagePaths = [];
   for (const scene of scenes) {
-    const url = await fetchBackgroundImage(scene.searchQuery);
-    imageUrls.push(url);
-    await new Promise(r => setTimeout(r, 300));
+    const imgPath = await fetchBackgroundImage(scene.searchQuery, jobId, scene.id);
+    imagePaths.push(imgPath);
+    await new Promise(r => setTimeout(r, 500));
   }
-  return imageUrls;
+  return imagePaths;
 }
 
 module.exports = { fetchAllImages };
