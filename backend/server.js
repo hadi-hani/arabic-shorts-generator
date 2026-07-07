@@ -19,10 +19,10 @@ async function runPipeline(topic, jobId) {
   jobs[jobId].step = "🤖 Gemini يولّد السكريبت...";
   const script = await generateScript(topic);
 
-  jobs[jobId].step = "🎨 Cloudflare AI يولّد صور الخلفية...";
-  const imageUrls = await fetchAllImages(script.scenes, jobId);
+  jobs[jobId].step = "🖼️ جلب صور الخلفية من Pexels...";
+  const imageUrls = await fetchAllImages(script.scenes);
 
-  jobs[jobId].step = "🔊 توليد الصوت بـ Edge TTS...";
+  jobs[jobId].step = "🔊 توليد الصوت بالعربية...";
   const audioPaths = await generateAllAudio(script.scenes, jobId);
 
   const outputDir = path.join(__dirname, "output");
