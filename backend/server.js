@@ -136,21 +136,23 @@ app.get("/api/status/:jobId", (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// POST /api/captions  ← NEW: Generate social-media captions ONLY
+// POST /api/captions  — Generate social-media captions ONLY
 // Body: { topic: string, platforms?: ["tt","yt","fb","ig"] }
-// Returns: { topic, platforms: { tt: {...}, yt: {...}, fb: {...}, ig: {...} }, general_hashtags }
+// Returns: { topic, results: { tt: { description }, yt: { description }, ... } }
 // ─────────────────────────────────────────────────────────────────
 app.post("/api/captions", async (req, res) => {
   const { topic, platforms } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
   const validPlatforms = validatePlatforms(platforms);
-  // If no platforms specified → generate for all 4
-  const targetPlatforms = validPlatforms.length > 0 ? validPlatforms : ["tt", "yt", "fb", "ig"];
+  const targetPlatforms = validPlatforms.length > 0
+    ? validPlatforms
+    : ["tt", "yt", "fb", "ig"];
 
   try {
     const result = await generateCaptions(topic, targetPlatforms);
-    return res.json(result);
+    // result = { results: { tt: { description }, ... } }
+    return res.json({ topic, ...result });
   } catch (err) {
     console.error("Captions error:", err.message);
     return res.status(500).json({ error: err.message });

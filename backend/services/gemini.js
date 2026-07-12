@@ -140,42 +140,36 @@ Create 4-5 scenes. Keep narration in Arabic.`;
   return callGemini(prompt);
 }
 
-// NEW: generate ONLY social media captions (no video pipeline)
+// Generate ONLY social media captions (no video pipeline)
+// Returns: { results: { tt: { description }, yt: { description }, ... } }
 async function generateCaptions(topic, platforms) {
   const allPlatforms = platforms && platforms.length > 0
     ? platforms
     : ["tt", "yt", "fb", "ig"];
 
-  const prompt = `You are an expert Arabic social media content creator.
-Generate platform-specific social media captions in Arabic for the topic: "${topic}"
+  const prompt = `
+أنت خبير في كتابة محتوى السوشيال ميديا بالعربية.
+الموضوع: "${topic}"
+المنصات المطلوبة: ${allPlatforms.join(", ")}
 
-For each platform below, generate a complete caption with the specified requirements.
-Return ONLY valid JSON, no markdown, no extra text:
-{
-  "topic": "${topic}",
-  "platforms": {
+لكل منصة، أنتج نصاً واحداً جاهزاً للنسخ واللصق مباشرة في حقل الوصف عند النشر.
+النص يجب أن يحتوي على: العنوان + الوصف + الهاشتاغات — كلها معًا في نص واحد.
+
+معايير كل منصة:
 ${allPlatforms.map(p => {
   const cfg = PLATFORM_CONFIGS[p];
-  return `    "${p}": {
-      "platform_name": "${cfg.name}",
-      "caption": "Full Arabic caption, max ${cfg.maxChars} chars, tone: ${cfg.tone}, style: ${cfg.emojiStyle}",
-      "hashtags": ["#tag1", "#tag2"],
-      "cta": "Call to action in Arabic like '${cfg.ctaExample}'",
-      "char_count": 0
-    }`;
-}).join(",\n")}
-  },
-  "general_hashtags": ["#tag1", "#tag2", "#tag3"]
+  return `- ${p} (${cfg.name}): أسلوب ${cfg.tone}، ${cfg.emojiStyle}، ${cfg.hashtagCount} هاشتاغات، اختم بـ "${cfg.ctaExample}"، حد أقصى ${cfg.maxChars} حرف`;
+}).join("\n")}
+
+أرجع JSON بهذا الشكل فقط (بدون markdown أو نصوص إضافية):
+{
+  "results": {
+${allPlatforms.map(p => `    "${p}": { "description": "النص الكامل لـ${PLATFORM_CONFIGS[p].name} هنا" }`).join(",\n")}
+  }
 }
 
-Rules:
-- All captions MUST be in Arabic
-- TikTok & Instagram: max 2200 chars, use ${PLATFORM_CONFIGS.tt.hashtagCount}-${PLATFORM_CONFIGS.ig.hashtagCount} hashtags, energetic/trendy tone
-- YouTube: max 5000 chars, use 8 hashtags, informative tone
-- Facebook: conversational tone, use 3 hashtags, longer narrative is fine
-- Include relevant Arabic and English hashtags
-- Each caption must end with a CTA (call to action)
-- Set char_count to the actual character count of the caption`;
+أعد فقط المنصات المطلوبة: ${allPlatforms.join(", ")}
+`;
 
   return callGemini(prompt);
 }
