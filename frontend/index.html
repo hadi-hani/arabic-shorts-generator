@@ -787,7 +787,7 @@ function buildCapCards(plats) {
         (tags?'<div class="cap-tags">'+tags+'</div>':'') +
       '</div>' +
       '<div class="cap-foot">' +
-        '<button class="copy-btn" id="'+uid+'" onclick="copyCaption(this,'+JSON.stringify(copyText)+')">📋 نسخ</button>' +
+        '<button class="copy-btn" id="'+uid+'" data-copy="'+encodeURIComponent(copyText)+'">📋 نسخ</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -840,7 +840,7 @@ function showCaptionsOnly(data) {
         (cta?'<div class="cap-cta">📌 '+escHtml(cta)+'</div>':'') +
         (hashtags?'<div class="hash-row" style="justify-content:flex-start;margin-bottom:10px">'+hashtags+'</div>':'') +
         '<div style="font-size:.73rem;color:var(--muted);margin-bottom:8px">عدد الحروف: '+charCount+'</div>' +
-        '<button class="copy-btn" onclick="copyCaption(this,'+JSON.stringify(copyText)+')">📋 نسخ النص</button>' +
+        '<button class="copy-btn" data-copy="'+encodeURIComponent(copyText)+'">📋 نسخ النص</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -875,35 +875,37 @@ function copyCaption(btn, text) {
     btn.classList.add('copied');
     setTimeout(function(){ btn.innerHTML = originalHTML; btn.classList.remove('copied'); }, 2000);
   }
-  // Textarea fallback - works on HTTP
-  function execCopy() {
-    var ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.cssText = "position:absolute;left:-9999px;top:0";
+  function execCopy(t) {
+    var ta = document.createElement('textarea');
+    ta.value = t;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
     document.body.appendChild(ta);
-    var selected = document.getSelection().rangeCount > 0
-      ? document.getSelection().getRangeAt(0) : false;
+    ta.focus();
     ta.select();
     ta.setSelectionRange(0, 99999);
     var ok = false;
-    try { ok = document.execCommand("copy"); } catch(e) {}
+    try { ok = document.execCommand('copy'); } catch(e) {}
     document.body.removeChild(ta);
-    if (selected) {
-      document.getSelection().removeAllRanges();
-      document.getSelection().addRange(selected);
-    }
     return ok;
   }
-  // Try modern API first, fall back to execCommand
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(onSuccess).catch(function() {
-      execCopy() ? onSuccess() : onFail();
-    });
+    navigator.clipboard.writeText(text)
+      .then(onSuccess)
+      .catch(function() { execCopy(text) ? onSuccess() : onFail(); });
   } else {
-    execCopy() ? onSuccess() : onFail();
+    execCopy(text) ? onSuccess() : onFail();
   }
 }
+
+// Event delegation for data-copy buttons (avoids JSON.stringify/quote issues)
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.copy-btn[data-copy]');
+  if (!btn) return;
+  e.preventDefault();
+  var text = decodeURIComponent(btn.getAttribute('data-copy'));
+  copyCaption(btn, text);
+});
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
