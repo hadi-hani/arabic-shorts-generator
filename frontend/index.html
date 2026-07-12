@@ -864,12 +864,34 @@ function toggleRow(uid) {
 }
 
 function copyCaption(btn, text) {
-  var ta = document.createElement('textarea');
-  ta.value = text; ta.style.cssText='position:fixed;opacity:0';
-  document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-  document.body.removeChild(ta);
-  btn.textContent = '✅ تم النسخ'; btn.classList.add('copied');
-  setTimeout(function(){ btn.textContent='📋 نسخ'; btn.classList.remove('copied'); }, 2000);
+  var originalText = btn.textContent;
+  function onSuccess() {
+    btn.textContent = '✅ تم النسخ';
+    btn.classList.add('copied');
+    setTimeout(function(){ btn.textContent = originalText; btn.classList.remove('copied'); }, 2000);
+  }
+  function onFail() {
+    btn.textContent = '❌ فشل النسخ';
+    btn.classList.add('copied');
+    setTimeout(function(){ btn.textContent = originalText; btn.classList.remove('copied'); }, 2000);
+  }
+  function fallbackCopy() {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;width:1px;height:1px';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? onSuccess() : onFail();
+    } catch(e) { onFail(); }
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(onSuccess).catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
 }
 
 function escHtml(s) {
