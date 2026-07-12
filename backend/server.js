@@ -3,7 +3,7 @@ const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const fs = require("fs");
-const { generateScript, PLATFORM_CONFIGS } = require("./services/gemini");
+const { generateScript, generateCaptions, PLATFORM_CONFIGS } = require("./services/gemini");
 const { generateAllAudio } = require("./services/elevenlabs");
 const { fetchAllImages }   = require("./services/pexels");
 const { renderVideo }      = require("./services/renderer");
@@ -83,7 +83,7 @@ app.get("/api/platforms", (req, res) => {
   res.json({ platforms: info });
 });
 
-// POST /api/generate — async
+// POST /api/generate — async (video pipeline)
 // Body: { topic: string, platforms?: ["tt","yt","fb","ig"] }
 app.post("/api/generate", async (req, res) => {
   const { topic, platforms } = req.body;
@@ -116,7 +116,6 @@ app.post("/api/generate-sync", async (req, res) => {
 
   try {
     const result = await runPipeline(topic, jobId, validPlatforms);
-    // Return platforms captions in response header as JSON (base64 to avoid header encoding issues)
     if (result.platforms) {
       res.setHeader("X-Platforms-Captions", Buffer.from(JSON.stringify(result.platforms)).toString("base64"));
     }
@@ -134,6 +133,28 @@ app.get("/api/status/:jobId", (req, res) => {
   const job = jobs[req.params.jobId];
   if (!job) return res.status(404).json({ error: "Job not found" });
   res.json(job);
+});
+
+// ─────────────────────────────────────────────────────────────────
+// POST /api/captions  ← NEW: Generate social-media captions ONLY
+// Body: { topic: string, platforms?: ["tt","yt","fb","ig"] }
+// Returns: { topic, platforms: { tt: {...}, yt: {...}, fb: {...}, ig: {...} }, general_hashtags }
+// ─────────────────────────────────────────────────────────────────
+app.post("/api/captions", async (req, res) => {
+  const { topic, platforms } = req.body;
+  if (!topic) return res.status(400).json({ error: "topic is required" });
+
+  const validPlatforms = validatePlatforms(platforms);
+  // If no platforms specified → generate for all 4
+  const targetPlatforms = validPlatforms.length > 0 ? validPlatforms : ["tt", "yt", "fb", "ig"];
+
+  try {
+    const result = await generateCaptions(topic, targetPlatforms);
+    return res.json(result);
+  } catch (err) {
+    console.error("Captions error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 const PORT = process.env.PORT || 3001;
