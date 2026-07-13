@@ -17,6 +17,9 @@ RUN mkdir -p output temp data
 # Copy nginx config
 COPY nginx.conf /etc/nginx/http.d/default.conf
 
+# Copy frontend UI to nginx html directory
+COPY public/index.html /usr/share/nginx/html/index.html
+
 # Copy supervisord config
 COPY supervisord.conf /etc/supervisord.conf
 
