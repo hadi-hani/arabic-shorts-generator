@@ -198,6 +198,53 @@ app.post("/api/captions", async (req, res) => {
   }
 });
 
+
+// POST /api/video — simple endpoint: topic + platforms -> videoUrl + previewUrl + captions
+// Body: { topic: string, platforms?: ["tt","yt","fb","ig"] }
+// Response: { jobId, videoUrl, previewUrl, downloadUrl, captions: { tt: {...}, yt: {...}, ... } }
+app.post("/api/video", async (req, res) => {
+  const { topic, platforms } = req.body;
+  if (!topic) return res.status(400).json({ error: "topic is required" });
+
+  const validPlatforms = validatePlatforms(platforms);
+  const targetPlatforms = validPlatforms.length > 0 ? validPlatforms : ["tt", "yt", "fb", "ig"];
+  const jobId = uuidv4();
+
+  setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms: targetPlatforms });
+
+  try {
+    const result = await runPipeline(topic, jobId, targetPlatforms, { voice: "male", speakingRate: 0.95 });
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const videoUrl    = `${baseUrl}${result.videoUrl}`;
+    const previewUrl  = `${baseUrl}/api/status/${jobId}`;
+    const downloadUrl = `${baseUrl}${result.videoUrl}`;
+
+    const captions = {};
+    if (result.platforms) {
+      for (const [platform, data] of Object.entries(result.platforms)) {
+        captions[platform] = {
+          caption: data.caption || data.description || "",
+          hashtags: data.hashtags || []
+        };
+      }
+    }
+
+    return res.json({
+      jobId,
+      title: result.title,
+      videoUrl,
+      previewUrl,
+      downloadUrl,
+      captions
+    });
+  } catch (err) {
+    console.error("Video endpoint error:", err.message);
+    setJob(jobId, { status: "error", message: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // #3 CRON: Auto-cleanup output files older than 48 hours (runs every hour)
 setInterval(() => {
   const outputDir = path.join(__dirname, "output");
