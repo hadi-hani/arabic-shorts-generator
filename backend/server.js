@@ -13,9 +13,39 @@ app.use(cors());
 app.use(express.json());
 app.use("/output", express.static(path.join(__dirname, "output")));
 
-const jobs = {};
+// #6 FIX: Persist jobs to disk so restarts don't lose state
+const JOBS_FILE = path.join(__dirname, "data", "jobs.json");
+fs.mkdirSync(path.dirname(JOBS_FILE), { recursive: true });
 
-// Validate platforms array — only allow: tt, yt, fb, ig
+let jobs = {};
+try {
+  const raw = fs.readFileSync(JOBS_FILE, "utf8");
+  jobs = JSON.parse(raw);
+  // Only keep jobs from last 24 hours
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  for (const [id, job] of Object.entries(jobs)) {
+    if (job.createdAt && job.createdAt < cutoff) delete jobs[id];
+    // Drop stale "processing" jobs from previous server instance
+    if (job.status === "processing") {
+      jobs[id] = { status: "error", message: "Server was restarted during processing" };
+    }
+  }
+  console.log(`💾 Loaded ${Object.keys(jobs).length} jobs from disk`);
+} catch (_) {
+  jobs = {};
+}
+
+function saveJobs() {
+  try { fs.writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2)); } catch (e) {
+    console.warn("⚠️ Could not save jobs:", e.message);
+  }
+}
+
+function setJob(jobId, data) {
+  jobs[jobId] = { ...data, createdAt: jobs[jobId]?.createdAt || Date.now() };
+  saveJobs();
+}
+
 function validatePlatforms(platforms) {
   if (!platforms) return [];
   if (!Array.isArray(platforms)) return [];
@@ -23,15 +53,15 @@ function validatePlatforms(platforms) {
   return platforms.filter(p => valid.includes(p));
 }
 
-async function runPipeline(topic, jobId, platforms) {
-  jobs[jobId].step = "🤖 Gemini يولّد السكريبت...";
+async function runPipeline(topic, jobId, platforms, { voice = "male", speakingRate = 0.95 } = {}) {
+  setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms });
   const script = await generateScript(topic, platforms);
 
-  jobs[jobId].step = "🖼️ جلب صور الخلفية من Pexels...";
+  setJob(jobId, { status: "processing", step: "🖼️ جلب صور الخلفية من Pexels...", platforms });
   const imageUrls = await fetchAllImages(script.scenes);
 
-  jobs[jobId].step = "🔊 توليد الصوت بالعربية...";
-  const audioPaths = await generateAllAudio(script.scenes, jobId);
+  setJob(jobId, { status: "processing", step: `🔊 توليد الصوت (${voice})...`, platforms });
+  const audioPaths = await generateAllAudio(script.scenes, jobId, { voice, speakingRate });
 
   const outputDir = path.join(__dirname, "output");
   fs.mkdirSync(outputDir, { recursive: true });
@@ -44,7 +74,7 @@ async function runPipeline(topic, jobId, platforms) {
     return null;
   });
 
-  jobs[jobId].step = "🎥 FFmpeg يبني الفيديو النهائي...";
+  setJob(jobId, { status: "processing", step: "🎥 FFmpeg يبني الفيديو النهائي...", platforms });
   const finalPath = await renderVideo({ script, imageUrls, audioPaths, jobId });
 
   const result = {
@@ -60,62 +90,78 @@ async function runPipeline(topic, jobId, platforms) {
     }))
   };
 
-  // Attach platform captions if generated
   if (script.platforms && Object.keys(script.platforms).length > 0) {
     result.platforms = script.platforms;
   }
 
-  jobs[jobId] = result;
+  setJob(jobId, result);
   return result;
 }
 
 // GET /api/health
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
-// GET /api/platforms — list supported platforms
+// GET /api/platforms
 app.get("/api/platforms", (req, res) => {
   const info = Object.entries(PLATFORM_CONFIGS).map(([code, cfg]) => ({
-    code,
-    name: cfg.name,
-    maxChars: cfg.maxChars,
-    hashtagCount: cfg.hashtagCount
+    code, name: cfg.name, maxChars: cfg.maxChars, hashtagCount: cfg.hashtagCount
   }));
   res.json({ platforms: info });
 });
 
-// POST /api/generate — async (video pipeline)
-// Body: { topic: string, platforms?: ["tt","yt","fb","ig"] }
-app.post("/api/generate", async (req, res) => {
+// #8 NEW: GET /api/preview — generate script only, no video, fast
+// Body: { topic: string, platforms?: [...] }
+app.post("/api/preview", async (req, res) => {
   const { topic, platforms } = req.body;
+  if (!topic) return res.status(400).json({ error: "topic is required" });
+  try {
+    const validPlatforms = validatePlatforms(platforms);
+    const script = await generateScript(topic, validPlatforms);
+    return res.json({ topic, script });
+  } catch (err) {
+    console.error("Preview error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/generate — async pipeline
+// Body: { topic, platforms?, voice?, speakingRate? }
+app.post("/api/generate", async (req, res) => {
+  const { topic, platforms, voice, speakingRate } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
   const validPlatforms = validatePlatforms(platforms);
   const jobId = uuidv4();
-  jobs[jobId] = { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms: validPlatforms };
+  setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms: validPlatforms });
   res.json({ jobId, platforms: validPlatforms });
 
   (async () => {
     try {
-      await runPipeline(topic, jobId, validPlatforms);
+      await runPipeline(topic, jobId, validPlatforms, {
+        voice: voice || "male",
+        speakingRate: speakingRate ? Math.min(1.5, Math.max(0.5, Number(speakingRate))) : 0.95
+      });
     } catch (err) {
       console.error("Pipeline error:", err.message);
-      jobs[jobId] = { status: "error", message: err.message };
+      setJob(jobId, { status: "error", message: err.message });
     }
   })();
 });
 
-// POST /api/generate-sync — synchronous, returns video file directly
-// Body: { topic: string, filename?: string, platforms?: ["tt","yt","fb","ig"] }
+// POST /api/generate-sync
 app.post("/api/generate-sync", async (req, res) => {
-  const { topic, filename, platforms } = req.body;
+  const { topic, filename, platforms, voice, speakingRate } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
   const validPlatforms = validatePlatforms(platforms);
   const jobId = uuidv4();
-  jobs[jobId] = { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms: validPlatforms };
+  setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms: validPlatforms });
 
   try {
-    const result = await runPipeline(topic, jobId, validPlatforms);
+    const result = await runPipeline(topic, jobId, validPlatforms, {
+      voice: voice || "male",
+      speakingRate: speakingRate ? Math.min(1.5, Math.max(0.5, Number(speakingRate))) : 0.95
+    });
     if (result.platforms) {
       res.setHeader("X-Platforms-Captions", Buffer.from(JSON.stringify(result.platforms)).toString("base64"));
     }
@@ -123,7 +169,7 @@ app.post("/api/generate-sync", async (req, res) => {
     return res.download(result.videoPath, downloadName);
   } catch (err) {
     console.error("Sync pipeline error:", err.message);
-    jobs[jobId] = { status: "error", message: err.message };
+    setJob(jobId, { status: "error", message: err.message });
     return res.status(500).json({ error: err.message });
   }
 });
@@ -135,27 +181,43 @@ app.get("/api/status/:jobId", (req, res) => {
   res.json(job);
 });
 
-// ─────────────────────────────────────────────────────────────────
-// POST /api/captions  ← NEW: Generate social-media captions ONLY
-// Body: { topic: string, platforms?: ["tt","yt","fb","ig"] }
-// Returns: { topic, platforms: { tt: {...}, yt: {...}, fb: {...}, ig: {...} }, general_hashtags }
-// ─────────────────────────────────────────────────────────────────
+// POST /api/captions
 app.post("/api/captions", async (req, res) => {
   const { topic, platforms } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
   const validPlatforms = validatePlatforms(platforms);
-  // If no platforms specified → generate for all 4
   const targetPlatforms = validPlatforms.length > 0 ? validPlatforms : ["tt", "yt", "fb", "ig"];
 
   try {
     const result = await generateCaptions(topic, targetPlatforms);
-    return res.json(result);
+    return res.json({ topic, ...result });
   } catch (err) {
     console.error("Captions error:", err.message);
     return res.status(500).json({ error: err.message });
   }
 });
 
+// #3 CRON: Auto-cleanup output files older than 48 hours (runs every hour)
+setInterval(() => {
+  const outputDir = path.join(__dirname, "output");
+  const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+  try {
+    const files = fs.readdirSync(outputDir);
+    let removed = 0;
+    for (const file of files) {
+      const fp = path.join(outputDir, file);
+      const stat = fs.statSync(fp);
+      if (stat.mtimeMs < cutoff) {
+        fs.unlinkSync(fp);
+        removed++;
+      }
+    }
+    if (removed > 0) console.log(`🧹 Auto-cleaned ${removed} old output files`);
+  } catch (e) {
+    console.warn("⚠️ Cleanup error:", e.message);
+  }
+}, 60 * 60 * 1000);
+
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`\u2705 Backend running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT}`));
