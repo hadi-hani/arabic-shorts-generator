@@ -1,7 +1,8 @@
 FROM node:20-alpine
 
 # System dependencies
-RUN apk add --no-cache ffmpeg ttf-dejavu fontconfig nginx supervisor
+RUN apk add --no-cache ffmpeg ttf-dejavu fontconfig nginx supervisor \
+    font-noto font-noto-arabic ca-certificates
 RUN fc-cache -fv
 
 WORKDIR /app

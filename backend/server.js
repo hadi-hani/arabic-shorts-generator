@@ -105,7 +105,9 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
  * platforms defaults to ["tt","yt","fb","ig"] if omitted.
  * Takes ~1-3 minutes depending on video length.
  */
-app.post("/api/video", async (req, res) => {
+app.post("/api/generate", videoRouteHandler);
+app.post("/api/video", videoRouteHandler);
+async function videoRouteHandler(req, res) {
   const { topic, platforms } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
@@ -140,7 +142,8 @@ app.post("/api/video", async (req, res) => {
     setJob(jobId, { status: "error", message: err.message });
     return res.status(500).json({ error: err.message });
   }
-});
+}
+
 
 /**
  * GET /api/status/:jobId

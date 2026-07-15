@@ -599,7 +599,7 @@ function pollJob(jobId) {
           var pList = Object.keys(d.captions);
           log('الكابشنات المولَّدة: ' + pList.map(function(p){ return platNames[p]||p; }).join(', '), 'ok');
         }
-        videoUrl = d.videoPath || d.videoUrl;
+        videoUrl = d.videoUrl;
         setTimeout(function(){ showResult(d); document.getElementById('btn').disabled = false; }, 600);
       } else if (d.status === 'error') {
         clearInterval(jobTimer);
@@ -629,7 +629,7 @@ function showResult(d) {
         '<div class="cap-head"><span class="cap-pi" style="background:' + (platBgCol[p]||'#111') + '">' + (platIcons[p]||'') + '</span>' +
         '<span class="cap-name" style="color:' + (platColors[p]||'var(--text)') + '">' + escHtml(platNames[p]||p) + '</span></div>' +
         '<div class="cap-body">' +
-        '<div class="cap-text">' + escHtml(cap.text || '') + '</div>' +
+        '<div class="cap-text">' + escHtml(cap.caption || cap.text || '') + '</div>' +
         (cap.cta ? '<div class="cap-cta">' + escHtml(cap.cta) + '</div>' : '') +
         (tags ? '<div class="cap-tags">' + tags + '</div>' : '') +
         '</div>' +
@@ -652,12 +652,13 @@ function showResult(d) {
 
 function dlVideo() {
   if (!videoUrl) return;
-  fetch(videoUrl).then(function(r){ return r.blob(); }).then(function(b){
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(b);
-    a.download = 'arabic-short.mp4';
-    a.click();
-  });
+  var a = document.createElement('a');
+  a.href = videoUrl;
+  a.download = 'arabic-short.mp4';
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function copyCap(btn, plat, e) {

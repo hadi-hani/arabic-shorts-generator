@@ -45,24 +45,45 @@ function getKenBurnsFilter(type, duration, fps = 25) {
 
 function resolveArabicFont() {
   const candidates = [
+    // ── Alpine font-noto-arabic (confirmed path) ──────────────────
+    "/usr/share/fonts/noto/NotoSansArabic-Bold.ttf",
+    "/usr/share/fonts/noto/NotoSansArabic-SemiBold.ttf",
+    "/usr/share/fonts/noto/NotoSansArabic-Medium.ttf",
+    "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
+    // ── Noto Naskh Arabic (serif — not present on this image but keep for future) ──
+    "/usr/share/fonts/noto/NotoNaskhArabic-Bold.ttf",
+    "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf",
+    // ── Amiri — premium calligraphy (Dockerfile opt-in) ──────────
     "/usr/share/fonts/arabic/Amiri-Bold.ttf",
     "/usr/share/fonts/arabic/Amiri-Regular.ttf",
-    "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf",
-    "/usr/share/fonts/noto/NotoNaskhArabic-Bold.ttf",
+    // ── Debian/Ubuntu paths ───────────────────────────────────────
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf",
+    // ── Last resort (no Arabic shaping → boxes) ───────────────────
     "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"
   ];
   for (const f of candidates) {
-    if (fs.existsSync(f)) { console.log(`🔤 Font: ${f}`); return f; }
+    // Support simple glob for Noto wildcard path
+    if (f.includes("*")) {
+      try {
+        const dir = path.dirname(f);
+        const pattern = path.basename(f).replace(/\*/g, "");
+        const match = fs.readdirSync(dir).find(n => n.includes(pattern.replace(/\.ttf$/, "")));
+        if (match) { const full = path.join(dir, match); console.log(`🔤 Font (glob): ${full}`); return full; }
+      } catch (_) {}
+      continue;
+    }
+    if (fs.existsSync(f)) { console.log(`\uD83D\uDD24 Font: ${f}`); return f; }
   }
+  console.warn("⚠️  No Arabic font found — subtitles may render as boxes. Add font-noto-arabic to Dockerfile.");
   return "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf";
 }
 
 // ─────────────────────────────────────────────────────────────
 //  PROFESSIONAL ASS SUBTITLES GENERATOR
-//  Style: CapCut-style karaoke word-by-word highlight
+//  Style: Clean fade-in per line (simple, no slide/sweep animation)
 //  Font:  Amiri Bold (beautiful Arabic calligraphy)
-//  FX:    Pop scale animation + glow highlight per word
+//  FX:    Subtle fade-in (200ms) per subtitle line
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -136,12 +157,12 @@ function buildASSLine(lineWords, fontName) {
   let text = "";
   for (const wt of rtlWords) {
     const durCs = Math.round((wt.end - wt.start) * 100);
-    text += `{\\kf${durCs}}${wt.word} `;
+    text += `{\\k${durCs}}${wt.word} `;
   }
   // Prepend RLM (U+200F) to force RTL base direction for the whole line
   text = "‏" + text.trimEnd();
 
-  return `Dialogue: 0,${s},${e},ArabicSubs,,0,0,0,,${text}`;
+  return `Dialogue: 0,${s},${e},ArabicSubs,,0,0,0,,{\fad(200,100)}${text}`;
 }
 
 /**
@@ -162,7 +183,7 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: ArabicSubs,Amiri,90,&H00FFFFFF,&H00FFD700,&H00000000,&HDD000000,-1,0,0,0,100,100,0,0,3,5,2,2,60,60,260,1
+Style: ArabicSubs,${fontName},88,&H00FFFFFF,&H00FFDD00,&H00000000,&HAA000000,-1,0,0,0,100,100,2,0,3,4,2,2,60,60,280,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -211,7 +232,9 @@ async function renderScene({ scene, imageUrl, audioPath, jobId, index, total, fo
   // ── FFmpeg filter chain ──
   // 1. Ken Burns on image
   // 2. subtitles filter with ASS file (libass handles Arabic shaping + RTL + animation)
-  const subFilter = `subtitles=${assPath}:fontsdir=/usr/share/fonts/arabic`;
+  // Use the same directory where the resolved font lives so libass can load it
+  const fontsDir = path.dirname(fontFile);
+  const subFilter = `subtitles=${assPath}:fontsdir=${fontsDir}`;
 
   const filterComplex = `[0:v]${kbFilter},${subFilter}[vout]`;
 

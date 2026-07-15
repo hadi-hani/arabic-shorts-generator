@@ -119,7 +119,7 @@ ${platforms.map(p => {
     : "";
 
   const prompt = `You are an expert Arabic short video content creator and social media expert.
-Create a script for a 30-60 second short video about: "${topic}"
+Create a script for a SHORT video under 60 seconds about: "${topic}"
 ${platformsBlock}
 Return ONLY valid JSON, no markdown, no extra text:
 {
@@ -130,12 +130,12 @@ Return ONLY valid JSON, no markdown, no extra text:
       "narration": "Arabic narration text for this scene",
       "caption": "Short Arabic caption (max 6 words)",
       "searchQuery": "english keyword for background image",
-      "duration": 10
+      "duration": 7
     }
   ],
   "hashtags": ["#tag1", "#tag2"]${platformsJsonExample}
 }
-Create 4-5 scenes. Keep narration in Arabic.`;
+IMPORTANT: Split the narration into SHORT sentences — each sentence (5-8 words max) becomes its own scene. Create 4-6 scenes total so the full video stays under 50 seconds (ideally 35-45 seconds). Each scene narration must be a single short sentence in Arabic. Keep duration 6-8 seconds per scene.`;
 
   return callGemini(prompt);
 }
