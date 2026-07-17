@@ -1,9 +1,9 @@
 services:
-  backend:
-    build: ./backend
-    container_name: shorts-backend
+  app:
+    build: .
+    container_name: arabic-shorts-generator
     ports:
-      - "3002:3001"
+      - "8282:80"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-placeholder}
       - GOOGLE_TTS_KEY=${GOOGLE_TTS_KEY:-placeholder}
@@ -12,13 +12,5 @@ services:
     volumes:
       - ./backend/output:/app/output
       - ./backend/temp:/app/temp
-    restart: unless-stopped
-
-  frontend:
-    build: ./frontend
-    container_name: shorts-frontend
-    ports:
-      - "8181:80"
-    depends_on:
-      - backend
+      - ./backend/data:/app/data
     restart: unless-stopped

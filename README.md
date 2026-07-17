@@ -9,7 +9,7 @@ Provide a topic → get back a vertical 1080×1920 MP4 video + platform-optimize
 ## How It Works
 
 ```
-POST /api/video  { "topic": "..." }
+POST /api/generate  { "topic": "..." }
         │
         ├── Gemini AI     → Arabic script + hashtags
         ├── Google TTS    → Arabic voiceover (per scene)
@@ -19,9 +19,64 @@ POST /api/video  { "topic": "..." }
 
 ---
 
+## Quick Start (Any Server)
+
+### 1. Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) (for containerized deployment)
+- API keys from:
+  - [Google Gemini API](https://aistudio.google.com/) — free tier available
+  - [Google Cloud TTS](https://cloud.google.com/text-to-speech) — 1M chars/month free
+  - [Pexels API](https://www.pexels.com/api/) — free
+
+### 2. Clone & Configure
+
+```bash
+git clone https://github.com/hadi-hani/arabic-shorts-generator.git
+cd arabic-shorts-generator
+
+# Create environment file with your API keys
+cp .env.example backend/.env
+# Then edit backend/.env with your real keys
+```
+
+### 3. Build & Run (Single Container)
+
+```bash
+# Option A: Using docker-compose (recommended)
+docker compose up -d
+
+# Option B: Using plain docker
+docker build -t arabic-shorts-generator .
+docker run -d \
+  --name arabic-shorts \
+  -p 8282:80 \
+  --env-file ./backend/.env \
+  -v $(pwd)/backend/output:/app/output \
+  -v $(pwd)/backend/temp:/app/temp \
+  arabic-shorts-generator
+```
+
+### 4. Open in Browser
+
+Visit **http://localhost:8282** — you'll see the Arabic UI.
+
+### 5. Test the API
+
+```bash
+# Health check
+curl http://localhost:8282/api/health
+
+# Generate a short video
+curl -X POST http://localhost:8282/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{ "topic": "فوائد شرب الماء", "platforms": ["tt", "yt"] }'
+```
+
+---
+
 ## API Reference
 
-### `POST /api/video`
+### `POST /api/generate` (also `POST /api/video`)
 Generates a complete short video. Takes **1–3 minutes** depending on length.
 
 **Request**
@@ -84,47 +139,25 @@ Check the status of a running or completed job.
 
 ---
 
-## Running with Docker
+## Push to Docker Hub (CI/CD)
 
-### 1. Clone the repo
+The repository includes a **GitHub Actions** workflow (`.github/workflows/docker-publish.yml`) that automatically builds and pushes to Docker Hub on every push to `main`.
+
+To enable it:
+1. Add these **secrets** to your GitHub repo (Settings → Secrets and variables → Actions):
+   - `DOCKERHUB_USERNAME` — your Docker Hub username
+   - `DOCKERHUB_TOKEN` — a Docker Hub access token
+2. Push to `main` — the action builds and tags as `yourusername/arabic-shorts-generator:latest`
+
+Then on any server:
 ```bash
-git clone https://github.com/hadihani/arabic-shorts-generator.git
-cd arabic-shorts-generator
-```
-
-### 2. Set environment variables
-Create `backend/.env`:
-```env
-GEMINI_API_KEY=your_gemini_key
-GOOGLE_TTS_KEY=your_google_tts_key
-PEXELS_API_KEY=your_pexels_key
-```
-> ⚠️ Never commit `.env` to Git. It’s already in `.gitignore`.
-
-### 3. Build & run
-```bash
-# Build the backend image
-docker build -t arabic-shorts-backend ./backend
-
-# Run (maps container port 80 → host port 8282)
 docker run -d \
   --name arabic-shorts \
   -p 8282:80 \
-  --env-file ./backend/.env \
-  -v $(pwd)/backend/output:/app/output \
-  -v $(pwd)/backend/temp:/app/temp \
-  arabic-shorts-backend
-```
-
-### 4. Test it
-```bash
-# Health check
-curl http://localhost:8282/api/health
-
-# Generate a video
-curl -X POST http://localhost:8282/api/video \
-  -H 'Content-Type: application/json' \
-  -d '{ "topic": "فوائد شرب الماء", "platforms": ["tt", "yt"] }'
+  -e GEMINI_API_KEY=your_key \
+  -e GOOGLE_TTS_KEY=your_key \
+  -e PEXELS_API_KEY=your_key \
+  yourusername/arabic-shorts-generator:latest
 ```
 
 ---
@@ -133,19 +166,55 @@ curl -X POST http://localhost:8282/api/video \
 
 ```
 arabic-shorts-generator/
-└── backend/
-    ├── server.js          # Express API (3 endpoints)
-    ├── services/
-    │   ├── gemini.js        # Script + captions generation
-    │   ├── elevenlabs.js    # Arabic TTS (Google TTS)
-    │   ├── pexels.js        # Background image search
-    │   └── renderer.js      # FFmpeg video builder
-    ├── Dockerfile         # nginx + node + supervisor
-    ├── nginx.conf         # Proxy config (600s timeout)
-    ├── supervisord.conf   # Process manager
-    ├── package.json
-    ├── output/            # Generated MP4 files (auto-cleaned after 48h)
-    └── temp/              # Temporary audio files
+├── Dockerfile                # Single combined image (nginx + node + ffmpeg)
+├── docker-compose.yml        # One-command deployment
+├── .env.example              # Template for API keys
+├── .github/workflows/
+│   └── docker-publish.yml    # Auto-build & push to Docker Hub on push
+│
+├── backend/
+│   ├── server.js             # Express API (3 endpoints: generate, status, health)
+│   ├── package.json
+│   ├── nginx.conf            # Reverse proxy config (600s timeout)
+│   ├── supervisord.conf      # Manages nginx + node processes
+│   ├── Dockerfile            # Alternative base image (same structure)
+│   │
+│   ├── services/
+│   │   ├── gemini.js         # Script + captions generation via Google Gemini
+│   │   ├── tts.js            # Text-to-Speech via Google Cloud TTS
+│   │   ├── pexels.js         # Background image search via Pexels
+│   │   └── renderer.js       # FFmpeg video builder (Ken Burns + ASS subtitles)
+│   │
+│   ├── public/
+│   │   └── index.html        # Frontend UI (Arabic interface)
+│   │
+│   ├── output/               # Generated MP4 files (auto-cleaned after 48h)
+│   ├── temp/                 # Temporary audio/image segments
+│   └── data/                 # Job persistence (jobs.json)
+│
+├── frontend/
+│   ├── Dockerfile            # Standalone nginx container (alternative)
+│   └── index.html            # Same UI (alternative deployment)
+│
+└── deploy.sh                 # Production deploy script (VPS with hot-reload)
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GEMINI_API_KEY` | ✅ | Google Gemini API key (script + captions) |
+| `GOOGLE_TTS_KEY` | ✅ | Google Cloud TTS API key (voiceover) |
+| `PEXELS_API_KEY` | ✅ | Pexels API key (background images) |
+| `PORT` | ❌ | Backend port (default: 3001) |
+
+Create `backend/.env` (already in `.gitignore`):
+```env
+GEMINI_API_KEY=your_gemini_key
+GOOGLE_TTS_KEY=your_google_tts_key
+PEXELS_API_KEY=your_pexels_key
 ```
 
 ---
@@ -165,3 +234,5 @@ arabic-shorts-generator/
 - Video generation is **synchronous** — the request stays open until the video is ready (up to 3 min). Make sure your HTTP client has a long enough timeout.
 - Generated videos are **auto-deleted after 48 hours** to save disk space.
 - The container runs **nginx** (port 80) as a reverse proxy in front of **Node.js** (port 3001), managed by **supervisord**.
+- Arabic subtitles use **Noto Sans Arabic** font (included in the image) with ASS subtitle format for smooth rendering.
+- Job state is **persisted to disk** (`backend/data/jobs.json`) — restarts won't lose in-progress jobs.

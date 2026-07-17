@@ -665,7 +665,7 @@ function copyCap(btn, plat, e) {
   e.stopPropagation();
   var cap = (window._captionsData || {})[plat];
   if (!cap) return;
-  var full = (cap.text||'') + (cap.cta ? '\n' + cap.cta : '') + (cap.hashtags ? '\n' + cap.hashtags.join(' ') : '');
+  var full = (cap.caption || cap.text || '') + (cap.hashtags && cap.hashtags.length ? '\n' + cap.hashtags.join(' ') : '');
   navigator.clipboard.writeText(full).then(function(){
     btn.textContent = '✓ تم النسخ'; btn.classList.add('copied');
     setTimeout(function(){ btn.textContent = 'نسخ'; btn.classList.remove('copied'); }, 1800);

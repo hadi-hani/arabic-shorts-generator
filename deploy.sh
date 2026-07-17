@@ -76,8 +76,12 @@ fi
 
 ERRORS=0
 
-# frontend
-if [[ -f "$PROJECT_DIR/frontend/index.html" ]]; then
+# frontend (try backend/public first, fall back to frontend/)
+if [[ -f "$PROJECT_DIR/backend/public/index.html" ]]; then
+  docker cp "$PROJECT_DIR/backend/public/index.html" "$CONTAINER:$NGINX_HTML/index.html" \
+    && ok "backend/public/index.html -> $NGINX_HTML/index.html" \
+    || { warn "فشل نسخ backend/public/index.html"; ((ERRORS++)); }
+elif [[ -f "$PROJECT_DIR/frontend/index.html" ]]; then
   docker cp "$PROJECT_DIR/frontend/index.html" "$CONTAINER:$NGINX_HTML/index.html" \
     && ok "frontend/index.html -> $NGINX_HTML/index.html" \
     || { warn "فشل نسخ index.html"; ((ERRORS++)); }

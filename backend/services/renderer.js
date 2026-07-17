@@ -50,7 +50,7 @@ function resolveArabicFont() {
     "/usr/share/fonts/noto/NotoSansArabic-SemiBold.ttf",
     "/usr/share/fonts/noto/NotoSansArabic-Medium.ttf",
     "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
-    // ── Noto Naskh Arabic (serif — not present on this image but keep for future) ──
+    // ── Noto Naskh Arabic (serif) ────────────────────────────────
     "/usr/share/fonts/noto/NotoNaskhArabic-Bold.ttf",
     "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf",
     // ── Amiri — premium calligraphy (Dockerfile opt-in) ──────────
@@ -59,6 +59,10 @@ function resolveArabicFont() {
     // ── Debian/Ubuntu paths ───────────────────────────────────────
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
     "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf",
+    // ── Windows paths (local dev) ────────────────────────────────
+    "C:\\Windows\\Fonts\\arial.ttf",
+    "C:\\Windows\\Fonts\\tahoma.ttf",
+    "C:\\Windows\\Fonts\\trebuc.ttf",
     // ── Last resort (no Arabic shaping → boxes) ───────────────────
     "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"
   ];
@@ -81,25 +85,10 @@ function resolveArabicFont() {
 
 // ─────────────────────────────────────────────────────────────
 //  PROFESSIONAL ASS SUBTITLES GENERATOR
-//  Style: Clean fade-in per line (simple, no slide/sweep animation)
-//  Font:  Amiri Bold (beautiful Arabic calligraphy)
-//  FX:    Subtle fade-in (200ms) per subtitle line
+//  Style: Clean outlined text with fade-in
+//  Font:  Arabic-capable font (resolved at runtime)
+//  FX:    Smooth fade-in (300ms) per subtitle, no karaoke
 // ─────────────────────────────────────────────────────────────
-
-/**
- * Split Arabic text into words and assign timed segments
- * Distributes duration evenly across words (can be improved with Whisper later)
- */
-function buildWordTimings(text, startSec, durationSec) {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  const perWord = durationSec / words.length;
-  return words.map((word, i) => ({
-    word,
-    start: startSec + i * perWord,
-    end:   startSec + (i + 1) * perWord
-  }));
-}
 
 /**
  * Format seconds → ASS timestamp  h:mm:ss.cc
@@ -113,67 +102,50 @@ function toASS(sec) {
 }
 
 /**
- * Group words into lines of max N chars, keeping RTL word order
+ * Group Arabic words into visual lines of max N chars
+ * Preserves RTL word order — no reversal needed without karaoke tags
  */
-function groupIntoLines(wordTimings, maxChars = 18) {
+function groupWordsIntoLines(text, maxChars = 18) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+
   const lines = [];
   let cur = [];
   let curLen = 0;
 
-  for (const wt of wordTimings) {
-    const addLen = wt.word.length + (cur.length ? 1 : 0);
+  for (const word of words) {
+    const addLen = word.length + (cur.length ? 1 : 0);
     if (curLen + addLen > maxChars && cur.length) {
-      lines.push(cur);
-      cur = [wt];
-      curLen = wt.word.length;
+      lines.push(cur.join(" "));
+      cur = [word];
+      curLen = word.length;
     } else {
-      cur.push(wt);
+      cur.push(word);
       curLen += addLen;
     }
   }
-  if (cur.length) lines.push(cur);
+  if (cur.length) lines.push(cur.join(" "));
+
   return lines;
 }
 
 /**
- * Build one ASS event line
- * Uses {\k<cs>} karaoke tags for word-by-word highlight
- * + {\t()} transform for pop animation on each word
- */
-function buildASSLine(lineWords, fontName) {
-  const lineStart = lineWords[0].start;
-  const lineEnd   = lineWords[lineWords.length - 1].end;
-  const s = toASS(lineStart);
-  const e = toASS(lineEnd);
-
-  // ARABIC RTL FIX:
-  // ASS bidi algorithm renders Arabic words in visual order (right-to-left)
-  // but karaoke \k tags are always processed left-to-right in storage order.
-  // Solution: REVERSE the word array so storage-order = right-to-left visual order,
-  // then bidi flips them back to natural Arabic reading order on screen.
-  // Use \kf (fill sweep) for smooth highlight animation per word.
-  const rtlWords = [...lineWords].reverse();
-
-  let text = "";
-  for (const wt of rtlWords) {
-    const durCs = Math.round((wt.end - wt.start) * 100);
-    text += `{\\k${durCs}}${wt.word} `;
-  }
-  // Prepend RLM (U+200F) to force RTL base direction for the whole line
-  text = "‏" + text.trimEnd();
-
-  return `Dialogue: 0,${s},${e},ArabicSubs,,0,0,0,,{\fad(200,100)}${text}`;
-}
-
-/**
  * Generate complete .ass subtitle file for one scene
- * Returns path to the .ass file
+ * No karaoke tags — full lines render as continuous Arabic text
+ * so libass shapes letters correctly (connected, not منفصلة).
+ * Uses BorderStyle=1 (outline) instead of opaque box for professional look.
  */
 function generateASSFile({ text, startSec, durationSec, assPath, fontName }) {
-  const wordTimings = buildWordTimings(text, startSec, durationSec);
-  const lines       = groupIntoLines(wordTimings, 18);
+  const visualLines = groupWordsIntoLines(text, 18);
+  const fullText = visualLines.join("\\N"); // ASS \N = forced newline
+
+  const s = toASS(startSec);
+  const e = toASS(startSec + durationSec);
 
   // ASS header — style tuned for 1080x1920 vertical video
+  // BorderStyle: 1 (outline) — clean look, doesn't block video content
+  // Outline: 3, Shadow: 2 — good contrast on any background
+  // Alignment: 2 (bottom-center) — standard for captions
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -183,16 +155,13 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: ArabicSubs,${fontName},88,&H00FFFFFF,&H00FFDD00,&H00000000,&HAA000000,-1,0,0,0,100,100,2,0,3,4,2,2,60,60,280,1
+Style: ArabicSubs,${fontName},84,&H00FFFFFF,&H00FFDD00,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,60,60,240,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-`;
+Dialogue: 0,${s},${e},ArabicSubs,,0,0,0,,{\\fad(300,200)}‏${fullText}\n`;
 
-  // One dialogue line per group of words (line)
-  const dialogues = lines.map(lineWords => buildASSLine(lineWords, fontName)).join("\n");
-
-  fs.writeFileSync(assPath, header + dialogues + "\n", "utf8");
+  fs.writeFileSync(assPath, header, "utf8");
   return assPath;
 }
 
@@ -232,9 +201,10 @@ async function renderScene({ scene, imageUrl, audioPath, jobId, index, total, fo
   // ── FFmpeg filter chain ──
   // 1. Ken Burns on image
   // 2. subtitles filter with ASS file (libass handles Arabic shaping + RTL + animation)
-  // Use the same directory where the resolved font lives so libass can load it
-  const fontsDir = path.dirname(fontFile);
-  const subFilter = `subtitles=${assPath}:fontsdir=${fontsDir}`;
+  // Note: on Windows, absolute paths contain `C:\` colons which conflict with FFmpeg `:` option separator.
+  // We use a relative path (from CWD = backend/) to avoid colons entirely.
+  const relAssPath = `temp/${jobId}/sub_${index}.ass`;
+  const subFilter = `subtitles=${relAssPath}`;
 
   const filterComplex = `[0:v]${kbFilter},${subFilter}[vout]`;
 
@@ -245,7 +215,8 @@ async function renderScene({ scene, imageUrl, audioPath, jobId, index, total, fo
     "-map", "[vout]",
     ...(hasAudio ? ["-map", "1:a"] : ["-an"]),
     "-t", String(duration),
-    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26", "-pix_fmt", "yuv420p",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p",
+    "-c:a", "copy",
     "-r", String(FPS),
     ...(hasAudio ? ["-shortest"] : []),
     "-y", segOut

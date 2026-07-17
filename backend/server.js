@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const fs = require("fs");
 const { generateScript, generateCaptions, PLATFORM_CONFIGS } = require("./services/gemini");
-const { generateAllAudio } = require("./services/elevenlabs");
+const { generateAllAudio } = require("./services/tts");
 const { fetchAllImages }   = require("./services/pexels");
 const { renderVideo }      = require("./services/renderer");
 
@@ -12,6 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use("/output", express.static(path.join(__dirname, "output")));
+app.use(express.static(path.join(__dirname, "public")));
 
 // ─── Job Store (persisted to disk) ────────────────────────────────────────────
 const JOBS_FILE = path.join(__dirname, "data", "jobs.json");
@@ -97,7 +98,7 @@ async function runPipeline(topic, jobId, platforms) {
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
 /**
- * POST /api/video
+ * POST /api/generate  (also aliased as /api/video for backward compatibility)
  * Body:     { topic: string, platforms?: ["tt","yt","fb","ig"] }
  * Response: { jobId, title, videoUrl, downloadUrl, statusUrl, captions }
  *
@@ -106,7 +107,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
  * Takes ~1-3 minutes depending on video length.
  */
 app.post("/api/generate", videoRouteHandler);
-app.post("/api/video", videoRouteHandler);
+app.post("/api/video", videoRouteHandler);   // alias — documented in README
 async function videoRouteHandler(req, res) {
   const { topic, platforms } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
