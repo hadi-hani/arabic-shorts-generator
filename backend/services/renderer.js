@@ -44,6 +44,27 @@ function getKenBurnsFilter(type, duration, fps = 25) {
   }
 }
 
+// ── Bundled Arabic fonts (backend/fonts) ─────────────────────────────────
+// Font names are matched by fontconfig family name (libass resolves via fontsdir).
+const FONT_MAP = {
+  "Cairo":             { family: "Cairo",                file: "Cairo-Bold.ttf" },
+  "Tajawal":           { family: "Tajawal",              file: "Tajawal-Bold.ttf" },
+  "IBMPlexSansArabic": { family: "IBM Plex Sans Arabic", file: "IBMPlexSansArabic-Bold.ttf" },
+  "NotoSansArabic":    { family: "Noto Sans Arabic",     file: "NotoSansArabic.ttf" }
+};
+
+function resolveFont(fontName) {
+  const key = String(fontName || "").replace(/\s+/g, "");
+  const entry = FONT_MAP[key] || FONT_MAP["Cairo"];
+  const file = path.join(__dirname, "../fonts", entry.file);
+  if (!fs.existsSync(file)) {
+    console.warn(`⚠️ Font file missing: ${file} — falling back to fontconfig`);
+    return { family: entry.family, file: resolveArabicFont() };
+  }
+  console.log(`🔤 Font: ${entry.family} (${file})`);
+  return { family: entry.family, file };
+}
+
 function resolveArabicFont() {
   const candidates = [
     // ── Alpine font-noto-arabic (confirmed path) ──────────────────
@@ -93,92 +114,10 @@ function resolveArabicFont() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  PROFESSIONAL ASS SUBTITLES GENERATOR
-//  Style: Clean outlined text with fade-in
-//  Font:  Arabic-capable font (resolved at runtime)
-//  FX:    Smooth fade-in (300ms) per subtitle, no karaoke
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Format seconds → ASS timestamp  h:mm:ss.cc
- */
-function toASS(sec) {
-  const h  = Math.floor(sec / 3600);
-  const m  = Math.floor((sec % 3600) / 60);
-  const s  = Math.floor(sec % 60);
-  const cs = Math.round((sec % 1) * 100);
-  return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;
-}
-
-/**
- * Group Arabic words into visual lines of max N chars
- * Preserves RTL word order — no reversal needed without karaoke tags
- */
-function groupWordsIntoLines(text, maxChars = 18) {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-
-  const lines = [];
-  let cur = [];
-  let curLen = 0;
-
-  for (const word of words) {
-    const addLen = word.length + (cur.length ? 1 : 0);
-    if (curLen + addLen > maxChars && cur.length) {
-      lines.push(cur.join(" "));
-      cur = [word];
-      curLen = word.length;
-    } else {
-      cur.push(word);
-      curLen += addLen;
-    }
-  }
-  if (cur.length) lines.push(cur.join(" "));
-
-  return lines;
-}
-
-/**
- * Generate complete .ass subtitle file for one scene
- * No karaoke tags — full lines render as continuous Arabic text
- * so libass shapes letters correctly (connected, not منفصلة).
- * Uses BorderStyle=1 (outline) instead of opaque box for professional look.
- */
-function generateASSFile({ text, startSec, durationSec, assPath, fontName }) {
-  const visualLines = groupWordsIntoLines(text, 18);
-  const fullText = visualLines.join("\\N"); // ASS \N = forced newline
-
-  const s = toASS(startSec);
-  const e = toASS(startSec + durationSec);
-
-  // ASS header — style tuned for 1080x1920 vertical video
-  // BorderStyle: 1 (outline) — clean look, doesn't block video content
-  // Outline: 3, Shadow: 2 — good contrast on any background
-  // Alignment: 2 (bottom-center) — standard for captions
-  const header = `[Script Info]
-ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
-ScaledBorderAndShadow: yes
-WrapStyle: 2
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: ArabicSubs,${fontName},84,&H00FFFFFF,&H00FFDD00,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,60,60,240,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,${s},${e},ArabicSubs,,0,0,0,,{\\fad(300,200)}‏${fullText}\n`;
-
-  fs.writeFileSync(assPath, header, "utf8");
-  return assPath;
-}
-
-// ─────────────────────────────────────────────────────────────
 //  SCENE RENDERER
 // ─────────────────────────────────────────────────────────────
 
-async function renderScene({ scene, imageUrl, audioPath, wordTimings, subtitleMode, enableSubtitles, jobId, index, total, fontFile, fontName, FPS }) {
+async function renderScene({ scene, imageUrl, audioPath, wordTimings, subtitleMode, enableSubtitles, jobId, index, total, fontFamily, fontOptions, FPS }) {
   const workDir  = path.join(__dirname, `../temp/${jobId}`);
   const segOut   = path.join(workDir, `seg_${index}.mp4`);
   const imgPath  = path.join(workDir, `img_${index}.jpg`);
@@ -208,17 +147,23 @@ async function renderScene({ scene, imageUrl, audioPath, wordTimings, subtitleMo
     const assContent = buildAssFile(segments, {
       style: subtitleMode || "word",
       y: 1400,
-      font: fontName
+      font: fontFamily,
+      fontSize: fontOptions.fontSize,
+      fontColor: fontOptions.fontColor,
+      borderColor: fontOptions.borderColor,
+      borderWidth: fontOptions.borderWidth,
+      backgroundColor: fontOptions.backgroundColor
     });
     fs.writeFileSync(assPath, assContent, "utf8");
 
     // ── FFmpeg filter chain ──
     // 1. Ken Burns on image
     // 2. subtitles filter with ASS file (libass handles Arabic shaping + RTL + animation)
+    //    fontsdir=<backend>/fonts makes the bundled Arabic fonts resolvable by name.
     // Note: on Windows, absolute paths contain `C:\` colons which conflict with FFmpeg `:` option separator.
     // We use a relative path (from CWD = backend/) to avoid colons entirely.
     const relAssPath = `temp/${jobId}/sub_${index}.ass`;
-    subFilter = `,subtitles=${relAssPath}`;
+    subFilter = `,subtitles=${relAssPath}:fontsdir=fonts`;
   }
 
   const filterComplex = `[0:v]${kbFilter}${subFilter}[vout]`;
@@ -246,22 +191,18 @@ async function renderScene({ scene, imageUrl, audioPath, wordTimings, subtitleMo
 //  MAIN RENDER ENTRY
 // ─────────────────────────────────────────────────────────────
 
-async function renderVideo({ script, imageUrls, audioPaths, wordTimingsList, subtitleMode, enableSubtitles, jobId }) {
+async function renderVideo({ script, imageUrls, audioPaths, wordTimingsList, subtitleMode, enableSubtitles, jobId, fontName, fontOptions = {} }) {
   const workDir   = path.join(__dirname, `../temp/${jobId}`);
   const outputDir = path.join(__dirname, "../output");
   fs.mkdirSync(workDir,   { recursive: true });
   fs.mkdirSync(outputDir, { recursive: true });
 
   const scenes   = script.scenes;
-  const fontFile = resolveArabicFont();
-  // Extract font name from path for ASS header (Amiri Bold → "Amiri Bold")
-  const fontName = path.basename(fontFile, path.extname(fontFile))
-    .replace(/-/g, " ")        // Amiri-Bold → Amiri Bold
-    .replace(/\bRegular\b/,"") // drop "Regular" suffix
-    .trim();
+  const { family: fontFamily } = resolveFont(fontName);
   const FPS = 25;
 
-  console.log(`🔤 Using font: ${fontName} (${fontFile})`);
+  console.log(`🔤 Using font: ${fontFamily} (${fontName})`);
+  console.log(`🎨 Font options: ${JSON.stringify(fontOptions)}`);
   console.log(`⏱️ Rendering ${scenes.length} scenes in parallel...`);
   const startTime = Date.now();
 
@@ -273,7 +214,7 @@ async function renderVideo({ script, imageUrls, audioPaths, wordTimingsList, sub
       wordTimings: wordTimingsList && wordTimingsList[i],
       subtitleMode,
       enableSubtitles,
-      jobId, index: i, total: scenes.length, fontFile, fontName, FPS
+      jobId, index: i, total: scenes.length, fontFamily, fontOptions, FPS
     }))
   );
 

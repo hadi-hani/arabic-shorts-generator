@@ -7,9 +7,11 @@ RUN npm install --production
 # Stage 2: final image
 FROM node:20-alpine
 
-# System dependencies: nginx, ffmpeg, supervisor, Arabic fonts, CA certificates
+# System dependencies: nginx, ffmpeg, supervisor, Arabic fonts, CA certificates,
+# python3 for edge-tts (word-level timing via WordBoundary metadata)
 RUN apk add --no-cache nginx ffmpeg ttf-dejavu fontconfig supervisor \
-    font-noto font-noto-arabic ca-certificates && fc-cache -fv
+    font-noto font-noto-arabic ca-certificates python3 py3-pip && fc-cache -fv \
+    && pip3 install --break-system-packages --no-cache-dir edge-tts
 
 WORKDIR /app
 
@@ -17,6 +19,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY backend/server.js .
 COPY backend/services/ ./services/
+COPY backend/fonts/ ./fonts/
 COPY backend/public/ /usr/share/nginx/html/
 RUN mkdir -p output temp data
 

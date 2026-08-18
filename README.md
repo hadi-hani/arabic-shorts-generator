@@ -12,9 +12,9 @@ Provide a topic → get back a vertical 1080×1920 MP4 video + platform-optimize
 POST /api/generate  { "topic": "..." }
         │
         ├── Gemini AI     → Arabic script + hashtags
-        ├── Google TTS    → Arabic voiceover (per scene)
+        ├── Edge TTS      → Arabic voiceover + word timings (no API key)
         ├── Pexels API    → background images
-        └── FFmpeg        → 1080×1920 MP4 with Ken Burns + subtitles
+        └── FFmpeg        → 1080×1920 MP4 with Ken Burns + ASS subtitles
 ```
 
 ---
@@ -87,7 +87,13 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
   "ttsType": "edge",                        // optional — "edge" | "google" (default: edge)
   "subtitleMode": "word",                   // optional — "word" | "sentence" | "progressive" (default: word)
   "enableSubtitles": true,                  // optional — true | false (default: true)
-  "voice": "ar-SA-Zariyah"                  // optional — TTS voice (Edge: ar-SA-* names, Google: male/female)
+  "voice": "ar-SA-Zariyah",                 // optional — TTS voice (Edge: ar-SA-* names, Google: male/female)
+  "fontName": "Cairo",                      // optional — "Cairo" | "Tajawal" | "IBMPlexSansArabic" | "NotoSansArabic" (default: Cairo)
+  "fontSize": null,                         // optional — 20-160; omitted = auto per word (default: auto)
+  "fontColor": "white",                     // optional — "#RRGGBB" or name (white/yellow/black/...) (default: white)
+  "borderColor": "black",                   // optional — "#RRGGBB" or name (default: black)
+  "borderWidth": 5,                         // optional — 0-12 px outline (default: 5)
+  "backgroundColor": null                   // optional — "#RRGGBB" or "rgba(r,g,b,a)" for a background box (default: none)
 }
 ```
 
@@ -106,6 +112,16 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
 | `sentence` | كل جملة تظهر كاملة دفعة واحدة |
 | `progressive` | الكلمات تتراكم داخل الجملة حتى اكتمالها |
 
+**Fonts**
+| `fontName` | Font | Notes |
+|------------|------|-------|
+| `Cairo` | Cairo | **Default** — عصري واحترافي |
+| `Tajawal` | Tajawal | شائع في الفيديوهات |
+| `IBMPlexSansArabic` | IBM Plex Sans Arabic | احترافي |
+| `NotoSansArabic` | Noto Sans Arabic | شامل ومقروء |
+
+All fonts are bundled locally in `backend/fonts/` (SIL OFL license — commercial use OK) and burned in via libass/ASS, so no system font installation is needed. See [`backend/FONTS.md`](backend/FONTS.md) for details.
+
 **Response**
 ```json
 {
@@ -120,7 +136,13 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
     "subtitleMode": "word",
     "enableSubtitles": true,
     "wordCount": 150,
-    "duration": 20.9
+    "duration": 20.9,
+    "fontName": "Cairo",
+    "fontSize": null,
+    "fontColor": "white",
+    "borderColor": "black",
+    "borderWidth": 5,
+    "backgroundColor": null
   },
   "captions": {
     "tt": { "caption": "...", "hashtags": [] },
@@ -204,9 +226,14 @@ arabic-shorts-generator/
 │   │   ├── gemini.js         # Script + captions generation via Google Gemini
 │   │   ├── tts.js            # Unified TTS entry (Edge TTS + legacy Google TTS)
 │   │   ├── edge_tts.js       # Edge TTS via node-edge-tts + word-level timings
-│   │   ├── word_aligner.js   # Word timing alignment + ASS/SRT builders (3 subtitle modes)
+│   │   ├── word_aligner.js   # Word timing alignment + ASS/SRT builders (3 subtitle modes + font styling)
 │   │   ├── pexels.js         # Background image search via Pexels
-│   │   └── renderer.js       # FFmpeg video builder (Ken Burns + ASS subtitles)
+│   │   └── renderer.js       # FFmpeg video builder (Ken Burns + ASS subtitles + fontsdir)
+│   │
+│   ├── fonts/                # Bundled Arabic fonts (Cairo, Tajawal, IBM Plex, Noto)
+│   │   └── README.md         # Font sources + licenses
+│   │
+│   ├── FONTS.md              # Font options reference for the API
 │   │
 │   ├── public/
 │   │   └── index.html        # Frontend UI (Arabic interface)
@@ -259,5 +286,5 @@ GEMINI_MODEL=gemini-3.1-flash-lite   # optional
 - Video generation is **synchronous** — the request stays open until the video is ready (up to 3 min). Make sure your HTTP client has a long enough timeout.
 - Generated videos are **auto-deleted after 48 hours** to save disk space.
 - The container runs **nginx** (port 80) as a reverse proxy in front of **Node.js** (port 3001), managed by **supervisord**.
-- Arabic subtitles use **Noto Sans Arabic** font (included in the image) with ASS subtitle format for smooth rendering.
+- Arabic subtitles use bundled fonts (`backend/fonts/`, default **Cairo**) rendered via ASS/libass — no system font install needed; the Dockerfile copies `backend/fonts/` into the image.
 - Job state is **persisted to disk** (`backend/data/jobs.json`) — restarts won't lose in-progress jobs.

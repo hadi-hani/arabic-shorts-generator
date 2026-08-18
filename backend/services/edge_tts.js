@@ -1,12 +1,7 @@
 const fs = require("fs");
 const path = require("path");
-
-let EdgeTTS;
-try {
-  ({ EdgeTTS } = require("node-edge-tts"));
-} catch (_) {
-  EdgeTTS = null;
-}
+const os = require("os");
+const { spawn } = require("child_process");
 
 // Edge TTS voice map — mirrors the old Google male/female choices plus
 // sensible Arabic defaults. Accepts a full voice name directly too.
@@ -30,50 +25,76 @@ function resolveVoice(voice) {
 /**
  * Generate speech with Edge TTS plus precise word-level timings.
  *
+ * Uses the `edge-tts` Python package (>= 6.1.15) via a subprocess, because the
+ * Node `node-edge-tts` package embeds an outdated Sec-MS-GEC handshake that
+ * Microsoft rate-limits (HTTP 403). The Python package is actively maintained
+ * and returns WordBoundary metadata (offsets in 100-nanosecond ticks, matching
+ * the vertical-shorts-generator schema after converting to seconds).
+ *
  * Returns:
  *   { audioPath, wordTimings: [{word, start, end}, ...] }
- * with times in seconds (ms from node-edge-tts, converted to match the
- * schema used by vertical-shorts-generator's tts_word_timings.py).
+ * with times in seconds. Throws on any failure so the caller can fall back.
  */
 async function generateWithTimings(text, outputPath, { voice = "default", rate = "+0%" } = {}) {
-  if (!EdgeTTS) {
-    throw new Error("node-edge-tts is not installed");
-  }
-
   const resolved = resolveVoice(voice);
-  const tts = new EdgeTTS({
-    voice: resolved,
-    lang: resolved.split("-").slice(0, 2).join("-"),
-    saveSubtitles: true,
-    rate
-  });
 
-  await tts.ttsPromise(text, outputPath);
+  const script = [
+    "import asyncio, edge_tts, json, sys",
+    "",
+    "async def main():",
+    `    text = sys.argv[1]`,
+    `    out = sys.argv[2]`,
+    `    voice = sys.argv[3]`,
+    `    rate = sys.argv[4]`,
+    "    c = edge_tts.Communicate(text, voice, rate=rate, boundary='WordBoundary')",
+    "    timings = []",
+    "    with open(out, 'wb') as f:",
+    "        async for chunk in c.stream():",
+    "            t = chunk['type']",
+    "            if t == 'audio':",
+    "                f.write(chunk['data'])",
+    "            elif t == 'WordBoundary':",
+    "                offset_ms = chunk['offset'] // 10000",
+    "                duration_ms = chunk['duration'] // 10000",
+    "                timings.append({",
+    "                    'word': chunk['text'],",
+    "                    'start': offset_ms / 1000.0,",
+    "                    'end': (offset_ms + duration_ms) / 1000.0",
+    "                })",
+    "    print(json.dumps({'wordTimings': timings}))",
+    "",
+    "asyncio.run(main())"
+  ].join("\n");
 
-  const timingsPath = `${outputPath}.json`;
-  const wordTimings = [];
-  if (fs.existsSync(timingsPath)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(timingsPath, "utf8"));
-      for (const item of raw) {
-        const word = (item.part || "").trim();
-        const start = (item.start || 0) / 1000;
-        const end = (item.end || item.start || 0) / 1000;
-        if (word) {
-          wordTimings.push({
-            word,
-            start: Math.round(start * 1000) / 1000,
-            end: Math.round(Math.max(end, start) * 1000) / 1000
-          });
-        }
+  const scriptPath = path.join(os.tmpdir(), `edge_tts_${Date.now()}_${Math.floor(Math.random() * 1e6)}.py`);
+  fs.writeFileSync(scriptPath, script, "utf8");
+
+  return new Promise((resolve, reject) => {
+    const args = [scriptPath, String(text), String(outputPath), resolved, String(rate)];
+    const proc = spawn("python3", args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d) => { stdout += d.toString(); });
+    proc.stderr.on("data", (d) => { stderr += d.toString(); });
+    proc.on("error", (err) => reject(err));
+    proc.on("close", (code) => {
+      fs.unlinkSync(scriptPath);
+      if (code !== 0) {
+        return reject(new Error(`edge-tts (python) failed: ${(stderr || stdout).trim()}`));
       }
-      fs.unlinkSync(timingsPath);
-    } catch (e) {
-      console.warn(`⚠️ Could not parse edge-tts timings ${timingsPath}: ${e.message}`);
-    }
-  }
-
-  return { audioPath: outputPath, wordTimings, source: "edge" };
+      let wordTimings = [];
+      try {
+        const parsed = JSON.parse(stdout.trim().split("\n").pop());
+        wordTimings = parsed.wordTimings || [];
+      } catch (e) {
+        return reject(new Error(`edge-tts (python) bad output: ${e.message}`));
+      }
+      if (!fs.existsSync(outputPath)) {
+        return reject(new Error("edge-tts (python) produced no audio file"));
+      }
+      resolve({ audioPath: outputPath, wordTimings, source: "edge" });
+    });
+  });
 }
 
 module.exports = { generateWithTimings, resolveVoice, EDGE_VOICES };

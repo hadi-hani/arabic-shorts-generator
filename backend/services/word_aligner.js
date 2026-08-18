@@ -36,6 +36,47 @@ function toSrtTime(sec) {
   return `${p(h)}:${p(m)}:${p(s)},${String(ms).padStart(3, "0")}`;
 }
 
+/* ── Color conversion (#RRGGBB | named | rgba → ASS &HAABBGGRR) ── */
+
+const NAMED_COLORS = {
+  white: [255, 255, 255],
+  black: [0, 0, 0],
+  yellow: [255, 255, 0],
+  red: [255, 0, 0],
+  green: [0, 255, 0],
+  blue: [0, 0, 255],
+  gold: [255, 215, 0]
+};
+
+function toRgb(input) {
+  if (typeof input !== "string") return null;
+  const s = input.trim().toLowerCase();
+  if (NAMED_COLORS[s]) return { rgb: NAMED_COLORS[s], alpha: 0 };
+  if (s.startsWith("#")) {
+    let hex = s.slice(1);
+    if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+    if (!/^[0-9a-f]{6}$/.test(hex)) return null;
+    const n = parseInt(hex, 16);
+    return { rgb: [(n >> 16) & 255, (n >> 8) & 255, n & 255], alpha: 0 };
+  }
+  const m = s.match(/^rgba?\(([^)]+)\)$/);
+  if (m) {
+    const parts = m[1].split(",").map((x) => parseFloat(x.trim()));
+    if (parts.length < 3 || parts.slice(0, 3).some((x) => Number.isNaN(x))) return null;
+    const alpha = parts.length > 3 && !Number.isNaN(parts[3]) ? Math.round((1 - Math.max(0, Math.min(1, parts[3]))) * 255) : 0;
+    return { rgb: parts.slice(0, 3), alpha };
+  }
+  return null;
+}
+
+/** Convert CSS-ish color to ASS `&HAABBGGRR` (alpha 0 = opaque). */
+function toAssColor(input, fallback = [255, 255, 255]) {
+  const c = toRgb(input) || { rgb: fallback, alpha: 0 };
+  const [r, g, b] = c.rgb.map((v) => Math.max(0, Math.min(255, Math.round(v))));
+  const a = c.alpha;
+  return `&H${a.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${r.toString(16).padStart(2, "0")}`;
+}
+
 function tokenizeWords(text) {
   return String(text || "").split(/\s+/).filter(Boolean);
 }
@@ -265,7 +306,7 @@ function leadingTags(y, size, extra) {
   return `{\\pos(540,${y})\\an5\\fs${size}${extra || ""}}`;
 }
 
-function wordByWordEvents(seg, y) {
+function wordByWordEvents(seg, y, fixedSize) {
   const out = [];
   const words = seg.words;
   for (let i = 0; i < words.length; i++) {
@@ -274,7 +315,7 @@ function wordByWordEvents(seg, y) {
     const nextStart = i + 1 < words.length ? words[i + 1].start : seg.end;
     const clamped = Math.min(nextStart, start + MAX_WORD_WINDOW);
     const end = Math.max(clamped, Math.min(nextStart, start + MIN_WORD_WINDOW));
-    const size = fontsizeFor(w.text);
+    const size = fixedSize || fontsizeFor(w.text);
     const pop = "\\t(0,110,\\fscx100\\fscy100)";
     const text =
       leadingTags(y, size, `\\fscx75\\fscy75\\fad(40,40)${pop}`) + w.text;
@@ -283,20 +324,20 @@ function wordByWordEvents(seg, y) {
   return out;
 }
 
-function sentenceEvents(seg, y) {
+function sentenceEvents(seg, y, fixedSize) {
   const tokens = seg.words.map((w) => w.text);
-  const size = sentenceSize(tokens);
+  const size = fixedSize || sentenceSize(tokens);
   const text =
     leadingTags(y, size, `\\fad(120,120)`) + splitLines(tokens);
   return [eventLine(seg.start, seg.end, text)];
 }
 
-function progressiveEvents(seg, y) {
+function progressiveEvents(seg, y, fixedSize) {
   const words = seg.words;
   const n = words.length;
   if (!n) return [];
   const tokens = words.map((w) => w.text);
-  const size = sentenceSize(tokens);
+  const size = fixedSize || sentenceSize(tokens);
   const out = [];
   for (let k = 0; k < n; k++) {
     const start = words[k].start;
@@ -311,19 +352,31 @@ function progressiveEvents(seg, y) {
   return out;
 }
 
-/** Build a full .ass subtitle file for one scene (times are scene-relative). */
+/** Build a full .ass subtitle file for one scene (times are scene-relative).
+ * options: { style, y, font, fontSize?, fontColor?, borderColor?, borderWidth?, backgroundColor? }
+ */
 function buildAssFile(segments, options = {}) {
   const style = options.style || "word";
   const y = options.y != null ? options.y : 1400;
   const font = options.font || "Noto Sans Arabic";
+  const fixedSize =
+    options.fontSize != null
+      ? Math.max(24, Math.min(140, Math.round(Number(options.fontSize) || 70)))
+      : null;
+  const fontColor = toAssColor(options.fontColor, [255, 255, 255]);
+  const outlineColor = toAssColor(options.borderColor, [0, 0, 0]);
+  const outline = options.borderWidth != null ? Math.max(0, Math.min(12, Math.round(Number(options.borderWidth) || 5))) : 5;
+  const hasBg = options.backgroundColor != null && String(options.backgroundColor).trim() !== "" && String(options.backgroundColor).toLowerCase() !== "none";
+  const backColor = hasBg ? toAssColor(options.backgroundColor, [0, 0, 0]) : "&H00000000";
+  const borderStyle = hasBg ? 3 : 1;
   const events = [];
   for (const seg of segments) {
     const built =
       style === "progressive"
-        ? progressiveEvents(seg, y)
+        ? progressiveEvents(seg, y, fixedSize)
         : style === "sentence"
-          ? sentenceEvents(seg, y)
-          : wordByWordEvents(seg, y);
+          ? sentenceEvents(seg, y, fixedSize)
+          : wordByWordEvents(seg, y, fixedSize);
     events.push(...built);
   }
 
@@ -337,7 +390,7 @@ function buildAssFile(segments, options = {}) {
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Karaoke,${font},70,&H00FFFFFF,&H00000000,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,5,2,5,60,60,60,1`,
+    `Style: Karaoke,${font},${fixedSize || 70},${fontColor},&H00000000,${outlineColor},${backColor},-1,0,0,0,100,100,0,0,${borderStyle},${outline},2,5,60,60,60,1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -366,5 +419,6 @@ module.exports = {
   tokenizeWords,
   toAssTime,
   fontsizeFor,
-  alignTimings
+  alignTimings,
+  toAssColor
 };

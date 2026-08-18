@@ -113,6 +113,28 @@
       padding:12px 14px;outline:none;transition:border-color .2s;
     }
     select:focus{border-color:var(--accent)}
+
+    /* ─── FONT / STYLE CONTROLS ─── */
+    .style-row{
+      display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;
+    }
+    @media(max-width:480px){.style-row{grid-template-columns:1fr}}
+    .style-field{display:flex;flex-direction:column;gap:6px}
+    .style-val{
+      color:var(--accent);font-size:.72rem;font-weight:600;
+      font-family:monospace;direction:ltr;
+    }
+    input[type=range]{
+      width:100%;accent-color:var(--accent);cursor:pointer;
+      background:transparent;height:24px;
+    }
+    input[type=color]{
+      width:100%;height:38px;border:1.5px solid var(--border2);
+      border-radius:var(--radius);background:var(--surface2);
+      cursor:pointer;padding:4px;
+    }
+    input[type=color]:disabled{opacity:.35;cursor:not-allowed}
+
     .sub-check{
       display:flex;align-items:center;gap:8px;
       font-size:.8rem;color:var(--muted);
@@ -450,6 +472,50 @@
       <label class="sub-check"><input type="checkbox" id="enable-subs" checked/> تفعيل الترجمة على الفيديو</label>
     </div>
 
+    <hr class="divider"/>
+
+    <!-- FONT & STYLE -->
+    <div>
+      <div class="field-label">الخط</div>
+      <select id="font-name">
+        <option value="Cairo">Cairo (افتراضي)</option>
+        <option value="Tajawal">Tajawal</option>
+        <option value="IBMPlexSansArabic">IBM Plex Sans Arabic</option>
+        <option value="NotoSansArabic">Noto Sans Arabic</option>
+      </select>
+
+      <div class="style-row">
+        <div class="style-field">
+          <div class="field-label">حجم الخط <span class="style-val" id="fs-val">تلقائي</span></div>
+          <input type="range" id="font-size" min="0" max="140" step="1" value="0"/>
+          <label class="sub-check"><input type="checkbox" id="fs-auto" checked/> تلقائي (حسب طول النص)</label>
+        </div>
+        <div class="style-field">
+          <div class="field-label">سمك الحدود <span class="style-val" id="bw-val">5</span></div>
+          <input type="range" id="border-width" min="0" max="12" step="1" value="5"/>
+        </div>
+      </div>
+
+      <div class="style-row">
+        <div class="style-field">
+          <div class="field-label">لون الخط</div>
+          <input type="color" id="font-color" value="#ffffff"/>
+        </div>
+        <div class="style-field">
+          <div class="field-label">لون الحدود</div>
+          <input type="color" id="border-color" value="#000000"/>
+        </div>
+      </div>
+
+      <div class="style-row">
+        <div class="style-field">
+          <div class="field-label">خلفية النص <span class="style-val" id="bg-val">بدون</span></div>
+          <label class="sub-check"><input type="checkbox" id="bg-enable"/> خلفية شفافة</label>
+          <input type="color" id="bg-color" value="#000000" disabled/>
+        </div>
+      </div>
+    </div>
+
     <!-- SUBMIT -->
     <button id="btn" onclick="generate()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -565,6 +631,40 @@ function clearLog() {
   document.getElementById('debug-dot').className = 'debug-dot';
 }
 
+// ── Font / style controls wiring
+var fsSlider = document.getElementById('font-size');
+var fsAuto   = document.getElementById('fs-auto');
+var fsVal    = document.getElementById('fs-val');
+var bwSlider = document.getElementById('border-width');
+var bwVal    = document.getElementById('bw-val');
+var bgEnable = document.getElementById('bg-enable');
+var bgColor  = document.getElementById('bg-color');
+var bgVal    = document.getElementById('bg-val');
+
+function updateFsVal() {
+  if (fsAuto.checked) { fsVal.textContent = 'تلقائي'; fsSlider.disabled = true; }
+  else { fsVal.textContent = fsSlider.value; fsSlider.disabled = false; }
+}
+fsAuto.addEventListener('change', function(){ updateFsVal(); });
+fsSlider.addEventListener('input', function(){ fsVal.textContent = fsSlider.value; });
+bwSlider.addEventListener('input', function(){ bwVal.textContent = bwSlider.value; });
+bgEnable.addEventListener('change', function(){
+  bgColor.disabled = !bgEnable.checked;
+  bgVal.textContent = bgEnable.checked ? 'مفعّل' : 'بدون';
+});
+updateFsVal();
+
+function getFontOptions() {
+  return {
+    fontName: document.getElementById('font-name').value,
+    fontSize: fsAuto.checked ? null : parseInt(fsSlider.value, 10),
+    fontColor: document.getElementById('font-color').value,
+    borderColor: document.getElementById('border-color').value,
+    borderWidth: parseInt(bwSlider.value, 10),
+    backgroundColor: bgEnable.checked ? bgColor.value : null
+  };
+}
+
 // ── Generate
 function generate() {
   var topic = document.getElementById('inp').value.trim();
@@ -596,6 +696,7 @@ function generate() {
     subtitleMode: document.getElementById('subtitle-mode').value,
     enableSubtitles: document.getElementById('enable-subs').checked
   };
+  Object.assign(payload, getFontOptions());
   log('POST /api/generate → ' + JSON.stringify(payload), 'info');
 
   fetch('/api/generate', {
