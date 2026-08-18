@@ -1,4 +1,4 @@
-const { spawn } = require("child_process");
+const { spawn, execSync } = require("child_process");
 const fs   = require("fs");
 const path = require("path");
 const axios = require("axios");
@@ -66,6 +66,14 @@ function resolveArabicFont() {
     // ── Last resort (no Arabic shaping → boxes) ───────────────────
     "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"
   ];
+  // 1) Prefer fontconfig to locate a real Arabic-capable font
+  try {
+    const fontFile = execSync("fc-match -f '%{file}' 'Noto Sans Arabic'", { encoding: "utf8" }).trim();
+    if (fontFile && fs.existsSync(fontFile)) {
+      console.log(`🔤 Font (fontconfig): ${fontFile}`);
+      return fontFile;
+    }
+  } catch (_) {}
   for (const f of candidates) {
     // Support simple glob for Noto wildcard path
     if (f.includes("*")) {
