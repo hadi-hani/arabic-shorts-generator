@@ -2,6 +2,7 @@ const { spawn, execSync } = require("child_process");
 const fs   = require("fs");
 const path = require("path");
 const axios = require("axios");
+const { segmentCaptions, buildAssFile, buildSrt } = require("./word_aligner");
 
 async function downloadFile(url, destPath) {
   const response = await axios.get(url, { responseType: "arraybuffer", timeout: 15000 });
@@ -177,7 +178,7 @@ Dialogue: 0,${s},${e},ArabicSubs,,0,0,0,,{\\fad(300,200)}‏${fullText}\n`;
 //  SCENE RENDERER
 // ─────────────────────────────────────────────────────────────
 
-async function renderScene({ scene, imageUrl, audioPath, jobId, index, total, fontFile, fontName, FPS }) {
+async function renderScene({ scene, imageUrl, audioPath, wordTimings, subtitleMode, enableSubtitles, jobId, index, total, fontFile, fontName, FPS }) {
   const workDir  = path.join(__dirname, `../temp/${jobId}`);
   const segOut   = path.join(workDir, `seg_${index}.mp4`);
   const imgPath  = path.join(workDir, `img_${index}.jpg`);
@@ -196,25 +197,31 @@ async function renderScene({ scene, imageUrl, audioPath, jobId, index, total, fo
 
   const kbFilter = getKenBurnsFilter(index, duration, FPS);
 
-  // ── Generate ASS subtitle file ──
-  const rawText = scene.narration || scene.caption || "";
-  generateASSFile({
-    text:        rawText,
-    startSec:    0,           // relative to this scene
-    durationSec: duration,
-    assPath,
-    fontName
-  });
+  // ── Generate subtitle file (only when enabled) ──
+  let subFilter = "";
+  if (enableSubtitles !== false) {
+    const rawText = scene.narration || scene.caption || "";
+    const segments = segmentCaptions(wordTimings || [], rawText, {
+      mode: subtitleMode || "word",
+      duration
+    });
+    const assContent = buildAssFile(segments, {
+      style: subtitleMode || "word",
+      y: 1400,
+      font: fontName
+    });
+    fs.writeFileSync(assPath, assContent, "utf8");
 
-  // ── FFmpeg filter chain ──
-  // 1. Ken Burns on image
-  // 2. subtitles filter with ASS file (libass handles Arabic shaping + RTL + animation)
-  // Note: on Windows, absolute paths contain `C:\` colons which conflict with FFmpeg `:` option separator.
-  // We use a relative path (from CWD = backend/) to avoid colons entirely.
-  const relAssPath = `temp/${jobId}/sub_${index}.ass`;
-  const subFilter = `subtitles=${relAssPath}`;
+    // ── FFmpeg filter chain ──
+    // 1. Ken Burns on image
+    // 2. subtitles filter with ASS file (libass handles Arabic shaping + RTL + animation)
+    // Note: on Windows, absolute paths contain `C:\` colons which conflict with FFmpeg `:` option separator.
+    // We use a relative path (from CWD = backend/) to avoid colons entirely.
+    const relAssPath = `temp/${jobId}/sub_${index}.ass`;
+    subFilter = `,subtitles=${relAssPath}`;
+  }
 
-  const filterComplex = `[0:v]${kbFilter},${subFilter}[vout]`;
+  const filterComplex = `[0:v]${kbFilter}${subFilter}[vout]`;
 
   const ffArgs = [
     "-loop", "1", "-framerate", String(FPS), "-i", imgPath,
@@ -239,7 +246,7 @@ async function renderScene({ scene, imageUrl, audioPath, jobId, index, total, fo
 //  MAIN RENDER ENTRY
 // ─────────────────────────────────────────────────────────────
 
-async function renderVideo({ script, imageUrls, audioPaths, jobId }) {
+async function renderVideo({ script, imageUrls, audioPaths, wordTimingsList, subtitleMode, enableSubtitles, jobId }) {
   const workDir   = path.join(__dirname, `../temp/${jobId}`);
   const outputDir = path.join(__dirname, "../output");
   fs.mkdirSync(workDir,   { recursive: true });
@@ -263,6 +270,9 @@ async function renderVideo({ script, imageUrls, audioPaths, jobId }) {
       scene,
       imageUrl:  imageUrls[i],
       audioPath: audioPaths[i],
+      wordTimings: wordTimingsList && wordTimingsList[i],
+      subtitleMode,
+      enableSubtitles,
       jobId, index: i, total: scenes.length, fontFile, fontName, FPS
     }))
   );
@@ -279,6 +289,33 @@ async function renderVideo({ script, imageUrls, audioPaths, jobId }) {
     "-movflags","+faststart","-y",finalOutput
   ]);
 
+  // ── Build a combined .srt for the whole video (global timeline) ──
+  const srtOutput = path.join(outputDir, `${jobId}.srt`);
+  if (enableSubtitles !== false) {
+    try {
+      const allSegments = [];
+      let offset = 0;
+      for (let i = 0; i < scenes.length; i++) {
+        const rawText = scenes[i].narration || scenes[i].caption || "";
+        const segs = segmentCaptions(wordTimingsList && wordTimingsList[i] || [], rawText, {
+          mode: subtitleMode || "word",
+          duration: await getAudioDuration(audioPaths[i]).catch(() => scenes[i].duration || 8)
+        });
+        for (const s of segs) {
+          allSegments.push({
+            words: s.words,
+            start: s.start + offset,
+            end: s.end + offset
+          });
+        }
+        offset += await getAudioDuration(audioPaths[i]).catch(() => scenes[i].duration || 8);
+      }
+      fs.writeFileSync(srtOutput, buildSrt(allSegments), "utf8");
+    } catch (e) {
+      console.warn("⚠️ Could not build combined SRT:", e.message);
+    }
+  }
+
   const elapsed = ((Date.now()-startTime)/1000).toFixed(1);
   console.log(`🎬 Final video (${elapsed}s total): ${finalOutput}`);
 
@@ -289,7 +326,7 @@ async function renderVideo({ script, imageUrls, audioPaths, jobId }) {
     console.warn(`⚠️ Cleanup failed: ${e.message}`);
   }
 
-  return finalOutput;
+  return { finalPath: finalOutput, srtPath: enableSubtitles !== false ? srtOutput : null };
 }
 
 module.exports = { renderVideo };

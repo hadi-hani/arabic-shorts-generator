@@ -104,6 +104,22 @@
     /* ─── DIVIDER ─── */
     .divider{border:none;border-top:1px solid var(--border);margin:0 -28px}
 
+    /* ─── TTS / SUBTITLES CONTROLS ─── */
+    select{
+      width:100%;
+      background:var(--surface2);border:1.5px solid var(--border2);
+      border-radius:var(--radius);color:var(--text);
+      font-family:'Cairo',sans-serif;font-size:.88rem;
+      padding:12px 14px;outline:none;transition:border-color .2s;
+    }
+    select:focus{border-color:var(--accent)}
+    .sub-check{
+      display:flex;align-items:center;gap:8px;
+      font-size:.8rem;color:var(--muted);
+      margin-top:10px;cursor:pointer;direction:rtl;justify-content:flex-end;
+    }
+    .sub-check input{width:auto;accent-color:var(--accent);cursor:pointer}
+
     /* ─── PLATFORM ─── */
     .plat-hint{
       font-size:.75rem;color:var(--muted);text-align:right;
@@ -410,6 +426,30 @@
       <div class="plat-none-note" id="plat-none-note">لم تختر أي منصة — سيُولَّد الفيديو فقط بدون أوصاف</div>
     </div>
 
+    <hr class="divider"/>
+
+    <!-- TTS TYPE -->
+    <div>
+      <div class="field-label">محرك الصوت (TTS)</div>
+      <select id="tts-type">
+        <option value="edge">Edge TTS (افتراضي — بدون مفتاح)</option>
+        <option value="google">Google TTS (يتطلب مفتاحاً)</option>
+      </select>
+    </div>
+
+    <hr class="divider"/>
+
+    <!-- SUBTITLE MODE -->
+    <div>
+      <div class="field-label">نمط الترجمة</div>
+      <select id="subtitle-mode">
+        <option value="word">كلمة بكلمة (افتراضي)</option>
+        <option value="sentence">جمل كاملة</option>
+        <option value="progressive">تدريجي (كلمات تتراكم)</option>
+      </select>
+      <label class="sub-check"><input type="checkbox" id="enable-subs" checked/> تفعيل الترجمة على الفيديو</label>
+    </div>
+
     <!-- SUBMIT -->
     <button id="btn" onclick="generate()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -546,7 +586,16 @@ function generate() {
   setOutput(progressHTML());
   setProgress(5, 'جارٍ إرسال الطلب...');
 
-  var payload = { topic: topic, platforms: plats, mode: 'video', voice: 'male', speed: 0.95 };
+  var payload = {
+    topic: topic,
+    platforms: plats,
+    mode: 'video',
+    voice: 'male',
+    speed: 0.95,
+    ttsType: document.getElementById('tts-type').value,
+    subtitleMode: document.getElementById('subtitle-mode').value,
+    enableSubtitles: document.getElementById('enable-subs').checked
+  };
   log('POST /api/generate → ' + JSON.stringify(payload), 'info');
 
   fetch('/api/generate', {

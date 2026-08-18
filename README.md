@@ -83,7 +83,11 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
 ```json
 {
   "topic": "فوائد شرب الماء",
-  "platforms": ["tt", "yt", "fb", "ig"]   // optional — defaults to all four
+  "platforms": ["tt", "yt", "fb", "ig"],   // optional — defaults to all four
+  "ttsType": "edge",                        // optional — "edge" | "google" (default: edge)
+  "subtitleMode": "word",                   // optional — "word" | "sentence" | "progressive" (default: word)
+  "enableSubtitles": true,                  // optional — true | false (default: true)
+  "voice": "ar-SA-Zariyah"                  // optional — TTS voice (Edge: ar-SA-* names, Google: male/female)
 }
 ```
 
@@ -95,6 +99,13 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
 | `fb` | Facebook Reels |
 | `ig` | Instagram Reels |
 
+**Subtitle modes**
+| Mode | Description |
+|------|-------------|
+| `word` | كل كلمة تظهر بمفردها في توقيتها مع النطق |
+| `sentence` | كل جملة تظهر كاملة دفعة واحدة |
+| `progressive` | الكلمات تتراكم داخل الجملة حتى اكتمالها |
+
 **Response**
 ```json
 {
@@ -103,12 +114,22 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
   "videoUrl":   "http://your-host/output/e2a3e447-....mp4",
   "downloadUrl":"http://your-host/output/e2a3e447-....mp4",
   "statusUrl":  "http://your-host/api/status/e2a3e447-...",
+  "subtitlesUrl": "http://your-host/output/e2a3e447-....srt",
+  "metadata": {
+    "ttsType": "edge",
+    "subtitleMode": "word",
+    "enableSubtitles": true,
+    "wordCount": 150,
+    "duration": 20.9
+  },
   "captions": {
     "tt": { "caption": "...", "hashtags": [] },
     "yt": { "caption": "...", "hashtags": [] }
   }
 }
 ```
+
+> **TTS engines** — `edge` (default) uses Microsoft Edge TTS via `node-edge-tts`, needs **no API key** and returns precise word-level timings for animated subtitles. `google` keeps the legacy Google Cloud TTS path (requires `GOOGLE_TTS_KEY`). Edge voice names accept short forms like `ar-SA-Zariyah` (auto-appends `Neural`).
 
 ---
 
@@ -181,7 +202,9 @@ arabic-shorts-generator/
 │   │
 │   ├── services/
 │   │   ├── gemini.js         # Script + captions generation via Google Gemini
-│   │   ├── tts.js            # Text-to-Speech via Google Cloud TTS
+│   │   ├── tts.js            # Unified TTS entry (Edge TTS + legacy Google TTS)
+│   │   ├── edge_tts.js       # Edge TTS via node-edge-tts + word-level timings
+│   │   ├── word_aligner.js   # Word timing alignment + ASS/SRT builders (3 subtitle modes)
 │   │   ├── pexels.js         # Background image search via Pexels
 │   │   └── renderer.js       # FFmpeg video builder (Ken Burns + ASS subtitles)
 │   │
@@ -206,8 +229,8 @@ arabic-shorts-generator/
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GEMINI_API_KEY` | ✅ | Google Gemini API key (script + captions) |
-| `GOOGLE_TTS_KEY` | ✅ | Google Cloud TTS API key (voiceover) |
 | `PEXELS_API_KEY` | ✅ | Pexels API key (background images) |
+| `GOOGLE_TTS_KEY` | ❌ | Only needed if using `ttsType: "google"` (legacy voiceover) |
 | `GEMINI_MODEL` | ❌ | Gemini model override (e.g. `gemini-3.1-flash-lite`); tried before the default fallback chain |
 | `PORT` | ❌ | Backend port (default: 3001) |
 

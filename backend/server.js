@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const fs = require("fs");
 const { generateScript, generateCaptions, PLATFORM_CONFIGS } = require("./services/gemini");
-const { generateAllAudio } = require("./services/tts");
+const { generateAllAudio, generateSceneAudio } = require("./services/tts");
 const { fetchAllImages }   = require("./services/pexels");
 const { renderVideo }      = require("./services/renderer");
 
@@ -52,15 +52,21 @@ function validatePlatforms(platforms) {
 }
 
 // ─── Core Video Pipeline ───────────────────────────────────────────────────────
-async function runPipeline(topic, jobId, platforms) {
+async function runPipeline(topic, jobId, platforms, options = {}) {
+  const { ttsType = "edge", subtitleMode = "word", enableSubtitles = true, voice } = options;
+
   setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms });
   const script = await generateScript(topic, platforms);
 
   setJob(jobId, { status: "processing", step: "🖼️ جلب الصور من Pexels...", platforms });
   const imageUrls = await fetchAllImages(script.scenes);
 
-  setJob(jobId, { status: "processing", step: "🔊 توليد الصوت...", platforms });
-  const audioPaths = await generateAllAudio(script.scenes, jobId, { voice: "male", speakingRate: 0.95 });
+  setJob(jobId, { status: "processing", step: `🔊 توليد الصوت (${ttsType})...`, platforms });
+  const { audioPaths, timingsList } = await generateSceneAudio(script.scenes, jobId, {
+    ttsType,
+    voice: ttsType === "edge" ? (voice || "default") : (voice || "male"),
+    speakingRate: 0.95
+  });
 
   const outputDir = path.join(__dirname, "output");
   fs.mkdirSync(outputDir, { recursive: true });
@@ -74,19 +80,40 @@ async function runPipeline(topic, jobId, platforms) {
   });
 
   setJob(jobId, { status: "processing", step: "🎥 FFmpeg يبني الفيديو...", platforms });
-  const finalPath = await renderVideo({ script, imageUrls, audioPaths, jobId });
+  const { finalPath, srtPath } = await renderVideo({
+    script, imageUrls, audioPaths, wordTimingsList: timingsList,
+    subtitleMode, enableSubtitles, jobId
+  });
+
+  const wordCount = (timingsList || []).reduce((acc, t) => acc + (Array.isArray(t) ? t.length : 0), 0);
+  const duration = await getVideoDuration(finalPath);
 
   const result = {
     status: "done",
     title: script.title,
     videoUrl: `/output/${jobId}.mp4`,
     videoPath: finalPath,
+    subtitlesUrl: srtPath ? `/output/${jobId}.srt` : null,
+    metadata: { ttsType, subtitleMode, enableSubtitles, wordCount, duration },
     scenes: script.scenes.map((sc, i) => ({ ...sc, imageUrl: imageUrls[i], audioUrl: audioUrls[i] })),
     platforms: script.platforms || {}
   };
 
   setJob(jobId, result);
   return result;
+}
+
+function getVideoDuration(videoPath) {
+  return new Promise((resolve) => {
+    const { spawn } = require("child_process");
+    const proc = spawn("ffprobe", [
+      "-v", "error", "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1", videoPath
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    proc.stdout.on("data", d => (out += d.toString()));
+    proc.on("close", () => resolve(parseFloat(out.trim()) || 0));
+  });
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -99,27 +126,38 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
 /**
  * POST /api/generate  (also aliased as /api/video for backward compatibility)
- * Body:     { topic: string, platforms?: ["tt","yt","fb","ig"] }
- * Response: { jobId, title, videoUrl, downloadUrl, statusUrl, captions }
+ * Body:     { topic: string, platforms?: ["tt","yt","fb","ig"],
+ *             ttsType?: "edge"|"google", subtitleMode?: "word"|"sentence"|"progressive",
+ *             enableSubtitles?: boolean, voice?: string }
+ * Response: { jobId, title, videoUrl, downloadUrl, statusUrl, captions,
+ *             subtitlesUrl, metadata }
  *
  * Generates a full Arabic short video and returns download + caption links.
  * platforms defaults to ["tt","yt","fb","ig"] if omitted.
+ * ttsType defaults to "edge"; subtitleMode defaults to "word"; enableSubtitles defaults to true.
  * Takes ~1-3 minutes depending on video length.
  */
 app.post("/api/generate", videoRouteHandler);
 app.post("/api/video", videoRouteHandler);   // alias — documented in README
 async function videoRouteHandler(req, res) {
-  const { topic, platforms } = req.body;
+  const { topic, platforms, ttsType, subtitleMode, enableSubtitles, voice } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
   const validPlatforms = validatePlatforms(platforms);
   const targetPlatforms = validPlatforms.length > 0 ? validPlatforms : ["tt", "yt", "fb", "ig"];
   const jobId = uuidv4();
 
+  const options = {
+    ttsType: ttsType === "google" ? "google" : "edge",
+    subtitleMode: ["word", "sentence", "progressive"].includes(subtitleMode) ? subtitleMode : "word",
+    enableSubtitles: enableSubtitles !== false,
+    voice: voice || undefined
+  };
+
   setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms: targetPlatforms });
 
   try {
-    const result = await runPipeline(topic, jobId, targetPlatforms);
+    const result = await runPipeline(topic, jobId, targetPlatforms, options);
 
     const base = `${req.protocol}://${req.get("host")}`;
     const captions = {};
@@ -136,6 +174,8 @@ async function videoRouteHandler(req, res) {
       videoUrl:    `${base}${result.videoUrl}`,
       downloadUrl: `${base}${result.videoUrl}`,
       statusUrl:   `${base}/api/status/${jobId}`,
+      subtitlesUrl: result.subtitlesUrl ? `${base}${result.subtitlesUrl}` : null,
+      metadata:    result.metadata,
       captions
     });
   } catch (err) {
