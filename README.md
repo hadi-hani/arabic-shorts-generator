@@ -208,6 +208,7 @@ arabic-shorts-generator/
 | `GEMINI_API_KEY` | ✅ | Google Gemini API key (script + captions) |
 | `GOOGLE_TTS_KEY` | ✅ | Google Cloud TTS API key (voiceover) |
 | `PEXELS_API_KEY` | ✅ | Pexels API key (background images) |
+| `GEMINI_MODEL` | ❌ | Gemini model override (e.g. `gemini-3.1-flash-lite`); tried before the default fallback chain |
 | `PORT` | ❌ | Backend port (default: 3001) |
 
 Create `backend/.env` (already in `.gitignore`):
@@ -215,6 +216,7 @@ Create `backend/.env` (already in `.gitignore`):
 GEMINI_API_KEY=your_gemini_key
 GOOGLE_TTS_KEY=your_google_tts_key
 PEXELS_API_KEY=your_pexels_key
+GEMINI_MODEL=gemini-3.1-flash-lite   # optional
 ```
 
 ---
