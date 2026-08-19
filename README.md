@@ -77,32 +77,27 @@ docker run -d \
 
 ### 5. تجربة الـ API عبر cURL
 
-**فحص الصحة:**
-```bash
-curl http://localhost:8282/api/health
-```
+أمر واحد يكفي لتوليد فيديو كامل:
 
-**أبسط طلب — توليد فيديو:**
 ```bash
 curl -X POST http://localhost:8282/api/generate \
   -H 'Content-Type: application/json' \
   -d '{ "topic": "فوائد شرب الماء" }'
 ```
 
-> التوليد يستغرق **1-3 دقائق** — اجعل مهلة الـ HTTP طويلة كفاية.
+> التوليد يستغرق **1-3 دقائق** — اجعل مهلة الـ HTTP طويلة كفاية. أمثلة أكثر (بكل الخيارات، متابعة الحالة، فحص الصحة) في [مرجع الـ API](#مرجع-ال-api--دليل-curl-شامل).
 
 ---
 
 ## مرجع الـ API 📡 — دليل cURL شامل
 
-### نظرة سريعة على الدوال
+الخادم يوفر 4 دوال:
 
-| الدالة | الطريقة | المسار | الوصف |
-|--------|---------|--------|-------|
-| توليد فيديو | `POST` | `/api/generate` | ينشئ فيديو كاملاً ويعيد الروابط والأوصاف |
-| (اسم قديم) | `POST` | `/api/video` | نفس الدالة السابقة للتوافق |
-| حالة مهمة | `GET` | `/api/status/:jobId` | متابعة حالة مهمة جارية أو منتهية |
-| فحص الصحة | `GET` | `/api/health` | التأكد أن الخادم يعمل |
+| الطريقة | المسار | الوصف |
+|---------|--------|-------|
+| `POST` | `/api/generate` | توليد فيديو كامل (الاسم القديم `/api/video` يعمل أيضاً) |
+| `GET` | `/api/status/:jobId` | متابعة حالة مهمة |
+| `GET` | `/api/health` | فحص صحة الخادم |
 
 ---
 
@@ -110,63 +105,35 @@ curl -X POST http://localhost:8282/api/generate \
 
 ينشئ فيديو عمودياً (1080×1920) بصوت عربي وترجمة متحركة وأوصاف جاهزة للنشر.
 
-**جميع معاملات الطلب:**
-| المعامل | النوع | الافتراضي | الوصف |
-|---------|-------|-----------|-------|
-| `topic` | string | — | **مطلوب** — موضوع الفيديو بالعربية |
-| `platforms` | string[] | `["tt","yt","fb","ig"]` | المنصات المطلوبة أوصافها: `tt` (TikTok) `yt` (YouTube Shorts) `fb` (Facebook Reels) `ig` (Instagram Reels) |
-| `ttsType` | string | `edge` | محرك الصوت: `edge` (بدون مفتاح) أو `google` (يتطلب مفتاحاً) |
-| `subtitleMode` | string | `word` | نمط الترجمة: `word` (كلمة بكلمة) `sentence` (جمل كاملة) `progressive` (تدريجي) |
-| `enableSubtitles` | boolean | `true` | تفعيل الترجمة على الفيديو |
-| `enableTashkeel` | boolean | `true` | تشكيل السرد لتحسين النطق (للصوت فقط — الترجمة تبقى نظيفة) |
-| `voice` | string | متغير | الصوت. مع `edge`: اسم مختصر مثل `ar-SA-Zariyah` (تُضاف `Neural` تلقائياً). مع `google`: `male` أو `female` |
-| `fontName` | string | `NotoSansArabic` | الخط الوحيد المتاح — مقبول للتوافق مع الطلبات القديمة لكنه بلا تأثير |
-| `fontSize` | number | `null` (تلقائي) | حجم الخط من 20 إلى 160 |
-| `fontColor` | string | `white` | لون النص: `#RRGGBB` أو اسم |
-| `borderColor` | string | `black` | لون الحدود حول النص |
-| `borderWidth` | number | `5` | سمك الحدود من 0 إلى 12 |
-| `backgroundColor` | string | `null` | خلفية شبه شفافة للنص: `#RRGGBB` أو `rgba(r,g,b,a)` |
-
----
-
-#### أمثلة cURL عملية
-
-**① الحد الأدنى — الفيديو فقط بدون أوصاف:**
+**① الحد الأدنى — فيديو فقط:**
 ```bash
 curl -X POST http://localhost:8282/api/generate \
   -H 'Content-Type: application/json' \
   -d '{"topic":"فوائد شرب الماء"}'
 ```
 
-**② فيديو + أوصاف لمنصة أو منصتين:**
-```bash
-curl -X POST http://localhost:8282/api/generate \
-  -H 'Content-Type: application/json' \
-  -d '{"topic":"فوائد شرب الماء","platforms":["tt","yt"]}'
-```
-
-**③ بكل الخيارات (صوت/ترجمة/تنسيق):**
+**② بكل الخيارات — الشرح مدمج داخل الأوامر:**
 ```bash
 curl -X POST http://localhost:8282/api/generate \
   -H 'Content-Type: application/json' \
   -d '{
-    "topic": "فوائد شرب الماء",
-    "platforms": ["tt", "yt", "fb", "ig"],
-    "ttsType": "edge",
-    "subtitleMode": "progressive",
-    "enableSubtitles": true,
-    "enableTashkeel": true,
-    "voice": "ar-SA-Zariyah",
-    "fontName": "NotoSansArabic",
-    "fontSize": 60,
-    "fontColor": "#FFD700",
-    "borderColor": "#000000",
-    "borderWidth": 3,
-    "backgroundColor": "rgba(0,0,0,0.5)"
+    "topic": "فوائد شرب الماء",            // مطلوب — موضوع الفيديو بالعربية
+    "platforms": ["tt", "yt"],            // المنصات المطلوبة أوصافها: tt/yt/fb/ig — الحذف = الأربع كلها
+    "ttsType": "edge",                    // محرك الصوت: edge (بدون مفتاح) | google (يتطلب مفتاحاً)
+    "subtitleMode": "progressive",        // نمط الترجمة: word | sentence | progressive (الافتراضي: word)
+    "enableSubtitles": true,              // تفعيل الترجمة على الفيديو
+    "enableTashkeel": true,               // تشكيل السرد لتحسين النطق — للصوت فقط والترجمة تبقى نظيفة
+    "voice": "ar-SA-Zariyah",             // الصوت: مع edge اسم مختصر مثل ar-SA-Zariyah — مع google: male/female
+    "fontName": "NotoSansArabic",         // الخط الوحيد المتاح — مقبول للتوافق لكنه بلا تأثير
+    "fontSize": 60,                       // حجم الخط 20-160 — الحذف = تلقائي
+    "fontColor": "#FFD700",               // لون النص — "#RRGGBB" أو اسم
+    "borderColor": "#000000",             // لون الحدود حول النص
+    "borderWidth": 3,                     // سمك الحدود 0-12
+    "backgroundColor": "rgba(0,0,0,0.5)"  // خلفية شبه شفافة للنص — الحذف = بدون خلفية
   }'
 ```
 
-**④ قراءة الطلب من ملف JSON بدل الكتابة الطويلة:**
+**③ قراءة الطلب من ملف JSON بدل الكتابة الطويلة:**
 ```bash
 # أنشئ ملف payload.json بالمحتوى السابق ثم:
 curl -X POST http://localhost:8282/api/generate \
@@ -174,12 +141,9 @@ curl -X POST http://localhost:8282/api/generate \
   -d @payload.json
 ```
 
-> `platforms` يحدد **أي المنصات تُولَّد أوصافها** — إذا حذفته فتُولَّد أوصاف للأربع كلها، وإذا أرسلته فارغاً `[]` فالفيديو فقط بدون أوصاف.
+> `platforms` يحدد **أي المنصات تُولَّد أوصافها** — الحذف = الأربع كلها، `[]` فارغ = فيديو فقط بدون أوصاف.
 
----
-
-#### مثال الاستجابة
-
+**الاستجابة:**
 ```json
 {
   "jobId": "e2a3e447-...",
@@ -215,7 +179,7 @@ curl -X POST http://localhost:8282/api/generate \
 
 ### `GET /api/status/:jobId` — متابعة المهمة
 
-استخدم الـ `jobId` من الاستجابة السابقة لمعرفة حالة المهمة:
+استخدم الـ `jobId` من الاستجابة السابقة:
 
 ```bash
 curl http://localhost:8282/api/status/e2a3e447-xxxx-xxxx-xxxx-xxxxxxxxxxxx
