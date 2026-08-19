@@ -98,6 +98,11 @@ function splitSentences(text) {
 }
 
 /** Canonical key for matching script tokens against TTS word timings. */
+/** Strip Arabic diacritics (tashkeel): harakat, sukun, tatweel, superscript alef. */
+function stripTashkeel(text) {
+  return String(text || "").replace(/[\u064B-\u0652\u0670\u0640]/g, "");
+}
+
 function timingKey(raw) {
   return String(raw || "")
     .normalize("NFKC")
@@ -420,5 +425,6 @@ module.exports = {
   toAssTime,
   fontsizeFor,
   alignTimings,
-  toAssColor
+  toAssColor,
+  stripTashkeel
 };

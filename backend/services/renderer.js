@@ -2,7 +2,7 @@ const { spawn, execSync } = require("child_process");
 const fs   = require("fs");
 const path = require("path");
 const axios = require("axios");
-const { segmentCaptions, buildAssFile, buildSrt } = require("./word_aligner");
+const { segmentCaptions, buildAssFile, buildSrt, stripTashkeel } = require("./word_aligner");
 
 async function downloadFile(url, destPath) {
   const response = await axios.get(url, { responseType: "arraybuffer", timeout: 15000 });
@@ -140,7 +140,10 @@ async function renderScene({ scene, imageUrl, audioPath, wordTimings, subtitleMo
   let subFilter = "";
   if (enableSubtitles !== false) {
     const rawText = scene.narration || scene.caption || "";
-    const segments = segmentCaptions(wordTimings || [], rawText, {
+    // Audio is generated from the tashkeel'd narration (for correct TTS
+    // pronunciation); the on-screen subtitle stays clean (diacritics removed).
+    const displayText = stripTashkeel(rawText);
+    const segments = segmentCaptions(wordTimings || [], displayText, {
       mode: subtitleMode || "word",
       duration
     });
@@ -238,7 +241,8 @@ async function renderVideo({ script, imageUrls, audioPaths, wordTimingsList, sub
       let offset = 0;
       for (let i = 0; i < scenes.length; i++) {
         const rawText = scenes[i].narration || scenes[i].caption || "";
-        const segs = segmentCaptions(wordTimingsList && wordTimingsList[i] || [], rawText, {
+        const displayText = stripTashkeel(rawText);
+        const segs = segmentCaptions(wordTimingsList && wordTimingsList[i] || [], displayText, {
           mode: subtitleMode || "word",
           duration: await getAudioDuration(audioPaths[i]).catch(() => scenes[i].duration || 8)
         });

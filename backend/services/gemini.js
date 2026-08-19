@@ -98,7 +98,7 @@ async function callGemini(prompt, retries = 3) {
   throw new Error("جميع نماذج Gemini وصلت حد الاستخدام أو غير متاحة. حاول لاحقاً أو استخدم API key آخر.");
 }
 
-async function generateScript(topic, platforms = []) {
+async function generateScript(topic, platforms = [], options = {}) {
   const platformsBlock = platforms.length > 0
     ? `
 Also generate platform-specific captions for the following platforms: ${platforms.map(p => PLATFORM_CONFIGS[p].name).join(", ")}.
@@ -115,6 +115,19 @@ ${platforms.map(p => {
   "platforms": {
     ${platforms.map(p => `"${p}": { "caption": "..." }`).join(",\n    ")}
   }`
+    : "";
+
+  // Optional selective tashkeel (half-diacritization) so Edge TTS pronounces
+  // ambiguous Arabic words correctly. Only applies to narration; all other
+  // fields (title, caption, searchQuery, platform captions) stay clean.
+  const tashkeelBlock = options.enableTashkeel !== false
+    ? `IMPORTANT: In the "narration" of every scene, add SELECTIVE (half) tashkeel to help text-to-speech pronounce ambiguous words correctly.
+Rules:
+- Only diacritize words that could be read in more than one way (e.g. "كتب", "علم", "المدرسة", "ذهب").
+- Use ONLY fatha (َ), damma (ُ), kasra (ِ). Do NOT use tanween or sukun.
+- Do NOT over-diaconize; leave obvious words plain so the speech stays natural.
+- Example: instead of "ذهب الرجل الى المدرسة وقرأ الكتاب" write "ذهبَ الرجلُ إلى المدرسةِ وقرأَ الكتابَ".
+- Do NOT add any tashkeel to "title", "caption", "searchQuery", or platform captions.`
     : "";
 
   const prompt = `You are an expert Arabic short video content creator and social media expert.
@@ -134,6 +147,7 @@ Return ONLY valid JSON, no markdown, no extra text:
   ],
   "hashtags": ["#tag1", "#tag2"]${platformsJsonExample}
 }
+${tashkeelBlock}
 IMPORTANT: Split the narration into SHORT sentences — each sentence (5-8 words max) becomes its own scene. Create 4-6 scenes total so the full video stays under 50 seconds (ideally 35-45 seconds). Each scene narration must be a single short sentence in Arabic. Keep duration 6-8 seconds per scene.`;
 
   return callGemini(prompt);

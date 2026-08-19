@@ -112,6 +112,12 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
 | `sentence` | كل جملة تظهر كاملة دفعة واحدة |
 | `progressive` | الكلمات تتراكم داخل الجملة حتى اكتمالها |
 
+**Tashkeel (تشكيل النص)**
+| Setting | Description |
+|---------|-------------|
+| `enableTashkeel: true` (default) | يطلب Gemini تشكيلاً انتقائياً (نصف تشكيل: فتحة/ضمة/كسرة فقط) على الكلمات الغامضة في السرد لتحسين نطق TTS. التشكيل **للصوت فقط** — الترجمة على الفيديو تبقى نظيفة بدون حركات. |
+| `enableTashkeel: false` | السرد بدون تشكيل كما هو سابقاً. |
+
 **Fonts**
 | `fontName` | Font | Notes |
 |------------|------|-------|
@@ -135,6 +141,7 @@ All fonts are bundled locally in `backend/fonts/` (SIL OFL license — commercia
     "ttsType": "edge",
     "subtitleMode": "word",
     "enableSubtitles": true,
+    "enableTashkeel": true,
     "wordCount": 150,
     "duration": 20.9,
     "fontName": "Cairo",

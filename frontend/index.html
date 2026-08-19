@@ -457,6 +457,7 @@
         <option value="edge">Edge TTS (افتراضي — بدون مفتاح)</option>
         <option value="google">Google TTS (يتطلب مفتاحاً)</option>
       </select>
+      <label class="sub-check"><input type="checkbox" id="enable-tashkeel" checked/> تشكيل النص لتحسين النطق</label>
     </div>
 
     <hr class="divider"/>
@@ -694,7 +695,8 @@ function generate() {
     speed: 0.95,
     ttsType: document.getElementById('tts-type').value,
     subtitleMode: document.getElementById('subtitle-mode').value,
-    enableSubtitles: document.getElementById('enable-subs').checked
+    enableSubtitles: document.getElementById('enable-subs').checked,
+    enableTashkeel: document.getElementById('enable-tashkeel').checked
   };
   Object.assign(payload, getFontOptions());
   log('POST /api/generate → ' + JSON.stringify(payload), 'info');

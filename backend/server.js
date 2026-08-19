@@ -90,11 +90,11 @@ function sanitizeFontOptions(options = {}) {
 
 // ─── Core Video Pipeline ───────────────────────────────────────────────────────
 async function runPipeline(topic, jobId, platforms, options = {}) {
-  const { ttsType = "edge", subtitleMode = "word", enableSubtitles = true, voice } = options;
+  const { ttsType = "edge", subtitleMode = "word", enableSubtitles = true, voice, enableTashkeel = true } = options;
   const fontOptions = sanitizeFontOptions(options);
 
   setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms });
-  const script = await generateScript(topic, platforms);
+  const script = await generateScript(topic, platforms, { enableTashkeel });
 
   setJob(jobId, { status: "processing", step: "🖼️ جلب الصور من Pexels...", platforms });
   const imageUrls = await fetchAllImages(script.scenes);
@@ -133,7 +133,7 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
     videoUrl: `/output/${jobId}.mp4`,
     videoPath: finalPath,
     subtitlesUrl: srtPath ? `/output/${jobId}.srt` : null,
-    metadata: { ttsType, subtitleMode, enableSubtitles, wordCount, duration, ...fontOptions },
+    metadata: { ttsType, subtitleMode, enableSubtitles, enableTashkeel, wordCount, duration, ...fontOptions },
     scenes: script.scenes.map((sc, i) => ({ ...sc, imageUrl: imageUrls[i], audioUrl: audioUrls[i] })),
     platforms: script.platforms || {}
   };
@@ -167,7 +167,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
  * POST /api/generate  (also aliased as /api/video for backward compatibility)
  * Body:     { topic: string, platforms?: ["tt","yt","fb","ig"],
  *             ttsType?: "edge"|"google", subtitleMode?: "word"|"sentence"|"progressive",
- *             enableSubtitles?: boolean, voice?: string,
+ *             enableSubtitles?: boolean, enableTashkeel?: boolean, voice?: string,
  *             fontName?: "Cairo"|"Tajawal"|"IBMPlexSansArabic"|"NotoSansArabic",
  *             fontSize?: number (20-160), fontColor?: "#RRGGBB"|name,
  *             borderColor?: "#RRGGBB"|name, borderWidth?: number (0-12),
@@ -178,13 +178,14 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
  * Generates a full Arabic short video and returns download + caption links.
  * platforms defaults to ["tt","yt","fb","ig"] if omitted.
  * ttsType defaults to "edge"; subtitleMode defaults to "word"; enableSubtitles defaults to true.
+ * enableTashkeel defaults to true (selective diacritics for TTS pronunciation; on-screen subtitles stay clean).
  * fontName defaults to "Cairo"; borderWidth defaults to 5; fontColor "white"; borderColor "black".
  * Takes ~1-3 minutes depending on video length.
  */
 app.post("/api/generate", videoRouteHandler);
 app.post("/api/video", videoRouteHandler);   // alias — documented in README
 async function videoRouteHandler(req, res) {
-  const { topic, platforms, ttsType, subtitleMode, enableSubtitles, voice, fontName, fontSize, fontColor, borderColor, borderWidth, backgroundColor } = req.body;
+  const { topic, platforms, ttsType, subtitleMode, enableSubtitles, voice, enableTashkeel, fontName, fontSize, fontColor, borderColor, borderWidth, backgroundColor } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
   const validPlatforms = validatePlatforms(platforms);
@@ -195,6 +196,7 @@ async function videoRouteHandler(req, res) {
     ttsType: ttsType === "google" ? "google" : "edge",
     subtitleMode: ["word", "sentence", "progressive"].includes(subtitleMode) ? subtitleMode : "word",
     enableSubtitles: enableSubtitles !== false,
+    enableTashkeel: enableTashkeel !== false,
     voice: voice || undefined,
     fontName, fontSize, fontColor, borderColor, borderWidth, backgroundColor
   };
