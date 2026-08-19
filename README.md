@@ -1,51 +1,64 @@
 # Arabic Shorts Generator 🎥
 
-> **Generate ready-to-publish Arabic short videos (Shorts / Reels / TikToks) with a single API call.**
+> **مولّد فيديوهات قصيرة عربية جاهزة للنشر** (Shorts / Reels / TikTok) — بطلب واحد من الـ API.
 
-Provide a topic → get back a vertical 1080×1920 MP4 video + platform-optimized captions for TikTok, YouTube Shorts, Facebook, and Instagram — fully automated.
+اكتب موضوعاً بالعربية → تحصل على فيديو عمودي بدقة 1080×1920 بصوت عربي وترجمة متحركة + أوصاف جاهزة للنشر على تيك توك ويوتيوب شورتس وفيسبوك وإنستغرام — كل شيء تلقائياً.
 
 ---
 
-## How It Works
+## كيف يعمل؟ 🤔
 
 ```
-POST /api/generate  { "topic": "..." }
+POST /api/generate  { "topic": "فوائد شرب الماء" }
         │
-        ├── Gemini AI     → Arabic script + hashtags
-        ├── Edge TTS      → Arabic voiceover + word timings (no API key)
-        ├── Pexels API    → background images
-        └── FFmpeg        → 1080×1920 MP4 with Ken Burns + ASS subtitles
+        ├── Gemini AI    →  السيناريو + الأوصاف + الهاشتاغات
+        ├── Edge TTS     →  صوت عربي + توقيت كل كلمة (بدون مفتاح API)
+        ├── Pexels       →  صور خلفية للفيديو
+        └── FFmpeg       →  فيديو 1080×1920 مع حركة Ken Burns + ترجمة ASS
 ```
 
 ---
 
-## Quick Start (Any Server)
+## المتطلبات قبل البدء
 
-### 1. Prerequisites
-- [Docker](https://docs.docker.com/get-docker/) (for containerized deployment)
-- API keys from:
-  - [Google Gemini API](https://aistudio.google.com/) — free tier available
-  - [Google Cloud TTS](https://cloud.google.com/text-to-speech) — 1M chars/month free
-  - [Pexels API](https://www.pexels.com/api/) — free
+| الخدمة | الاستخدام | مفتاح API؟ |
+|--------|-----------|------------|
+| [Google Gemini](https://aistudio.google.com/) | توليد السيناريو والأوصاف | ✅ مطلوب (باقة مجانية متوفرة) |
+| [Pexels](https://www.pexels.com/api/) | صور الخلفية | ✅ مطلوب (مجاني) |
+| [Google Cloud TTS](https://cloud.google.com/text-to-speech) | صوت بديل (وضع قديم) | ❌ اختياري — لا يُستخدم افتراضياً |
 
-### 2. Clone & Configure
+> **ملاحظة مهمة**: الوضع الافتراضي للصوت هو **Edge TTS** من مايكروسوفت — **لا يحتاج أي مفتاح API**. يكفيك مفتاحان فقط (Gemini + Pexels) لتشغيل المشروع بالكامل.
+
+---
+
+## البدء السريع 🚀
+
+### 1. تجهيز المفاتيح
+
+1. احصل على مفتاح من [Google Gemini](https://aistudio.google.com/)
+2. احصل على مفتاح من [Pexels](https://www.pexels.com/api/)
+
+### 2. تنزيل المشروع وتجهيزه
 
 ```bash
 git clone https://github.com/hadi-hani/arabic-shorts-generator.git
 cd arabic-shorts-generator
 
-# Create environment file with your API keys
+# انسخ ملف المفاتيح ثم املأه بمفاتيحك الحقيقية
 cp .env.example backend/.env
-# Then edit backend/.env with your real keys
+nano backend/.env   # ضع مفاتيحك هنا
 ```
 
-### 3. Build & Run (Single Container)
+### 3. التشغيل (حاوية واحدة)
 
 ```bash
-# Option A: Using docker-compose (recommended)
+# الخيار الموصى به
 docker compose up -d
+```
 
-# Option B: Using plain docker
+أو عبر docker مباشرة:
+
+```bash
 docker build -t arabic-shorts-generator .
 docker run -d \
   --name arabic-shorts \
@@ -56,91 +69,132 @@ docker run -d \
   arabic-shorts-generator
 ```
 
-### 4. Open in Browser
+### 4. فتح الواجهة
 
-Visit **http://localhost:8282** — you'll see the Arabic UI.
+افتح المتصفح على: **http://localhost:8282**
 
-### 5. Test the API
+ستجد واجهة عربية كاملة: اكتب الموضوع، اختر المنصات والإعدادات، واضغط «توليد».
 
+### 5. تجربة الـ API عبر cURL
+
+**فحص الصحة:**
 ```bash
-# Health check
 curl http://localhost:8282/api/health
+```
 
-# Generate a short video
+**أبسط طلب — توليد فيديو:**
+```bash
 curl -X POST http://localhost:8282/api/generate \
   -H 'Content-Type: application/json' \
-  -d '{ "topic": "فوائد شرب الماء", "platforms": ["tt", "yt"] }'
+  -d '{ "topic": "فوائد شرب الماء" }'
 ```
+
+> التوليد يستغرق **1-3 دقائق** — اجعل مهلة الـ HTTP طويلة كفاية.
 
 ---
 
-## API Reference
+## مرجع الـ API 📡 — دليل cURL شامل
 
-### `POST /api/generate` (also `POST /api/video`)
-Generates a complete short video. Takes **1–3 minutes** depending on length.
+### نظرة سريعة على الدوال
 
-**Request**
-```json
-{
-  "topic": "فوائد شرب الماء",
-  "platforms": ["tt", "yt", "fb", "ig"],   // optional — defaults to all four
-  "ttsType": "edge",                        // optional — "edge" | "google" (default: edge)
-  "subtitleMode": "word",                   // optional — "word" | "sentence" | "progressive" (default: word)
-  "enableSubtitles": true,                  // optional — true | false (default: true)
-  "voice": "ar-SA-Zariyah",                 // optional — TTS voice (Edge: ar-SA-* names, Google: male/female)
-  "fontName": "NotoSansArabic",              // optional — only "NotoSansArabic" (default: NotoSansArabic)
-  "fontSize": null,                         // optional — 20-160; omitted = auto per word (default: auto)
-  "fontColor": "white",                     // optional — "#RRGGBB" or name (white/yellow/black/...) (default: white)
-  "borderColor": "black",                   // optional — "#RRGGBB" or name (default: black)
-  "borderWidth": 5,                         // optional — 0-12 px outline (default: 5)
-  "backgroundColor": null                   // optional — "#RRGGBB" or "rgba(r,g,b,a)" for a background box (default: none)
-}
+| الدالة | الطريقة | المسار | الوصف |
+|--------|---------|--------|-------|
+| توليد فيديو | `POST` | `/api/generate` | ينشئ فيديو كاملاً ويعيد الروابط والأوصاف |
+| (اسم قديم) | `POST` | `/api/video` | نفس الدالة السابقة للتوافق |
+| حالة مهمة | `GET` | `/api/status/:jobId` | متابعة حالة مهمة جارية أو منتهية |
+| فحص الصحة | `GET` | `/api/health` | التأكد أن الخادم يعمل |
+
+---
+
+### `POST /api/generate` — توليد فيديو
+
+ينشئ فيديو عمودياً (1080×1920) بصوت عربي وترجمة متحركة وأوصاف جاهزة للنشر.
+
+**جميع معاملات الطلب:**
+| المعامل | النوع | الافتراضي | الوصف |
+|---------|-------|-----------|-------|
+| `topic` | string | — | **مطلوب** — موضوع الفيديو بالعربية |
+| `platforms` | string[] | `["tt","yt","fb","ig"]` | المنصات المطلوبة أوصافها: `tt` (TikTok) `yt` (YouTube Shorts) `fb` (Facebook Reels) `ig` (Instagram Reels) |
+| `ttsType` | string | `edge` | محرك الصوت: `edge` (بدون مفتاح) أو `google` (يتطلب مفتاحاً) |
+| `subtitleMode` | string | `word` | نمط الترجمة: `word` (كلمة بكلمة) `sentence` (جمل كاملة) `progressive` (تدريجي) |
+| `enableSubtitles` | boolean | `true` | تفعيل الترجمة على الفيديو |
+| `enableTashkeel` | boolean | `true` | تشكيل السرد لتحسين النطق (للصوت فقط — الترجمة تبقى نظيفة) |
+| `voice` | string | متغير | الصوت. مع `edge`: اسم مختصر مثل `ar-SA-Zariyah` (تُضاف `Neural` تلقائياً). مع `google`: `male` أو `female` |
+| `fontName` | string | `NotoSansArabic` | الخط الوحيد المتاح — مقبول للتوافق مع الطلبات القديمة لكنه بلا تأثير |
+| `fontSize` | number | `null` (تلقائي) | حجم الخط من 20 إلى 160 |
+| `fontColor` | string | `white` | لون النص: `#RRGGBB` أو اسم |
+| `borderColor` | string | `black` | لون الحدود حول النص |
+| `borderWidth` | number | `5` | سمك الحدود من 0 إلى 12 |
+| `backgroundColor` | string | `null` | خلفية شبه شفافة للنص: `#RRGGBB` أو `rgba(r,g,b,a)` |
+
+---
+
+#### أمثلة cURL عملية
+
+**① الحد الأدنى — الفيديو فقط بدون أوصاف:**
+```bash
+curl -X POST http://localhost:8282/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"topic":"فوائد شرب الماء"}'
 ```
 
-**Platform codes**
-| Code | Platform |
-|------|----------|
-| `tt` | TikTok |
-| `yt` | YouTube Shorts |
-| `fb` | Facebook Reels |
-| `ig` | Instagram Reels |
+**② فيديو + أوصاف لمنصة أو منصتين:**
+```bash
+curl -X POST http://localhost:8282/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"topic":"فوائد شرب الماء","platforms":["tt","yt"]}'
+```
 
-**Subtitle modes**
-| Mode | Description |
-|------|-------------|
-| `word` | كل كلمة تظهر بمفردها في توقيتها مع النطق |
-| `sentence` | كل جملة تظهر كاملة دفعة واحدة |
-| `progressive` | الكلمات تتراكم داخل الجملة حتى اكتمالها |
+**③ بكل الخيارات (صوت/ترجمة/تنسيق):**
+```bash
+curl -X POST http://localhost:8282/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "topic": "فوائد شرب الماء",
+    "platforms": ["tt", "yt", "fb", "ig"],
+    "ttsType": "edge",
+    "subtitleMode": "progressive",
+    "enableSubtitles": true,
+    "enableTashkeel": true,
+    "voice": "ar-SA-Zariyah",
+    "fontName": "NotoSansArabic",
+    "fontSize": 60,
+    "fontColor": "#FFD700",
+    "borderColor": "#000000",
+    "borderWidth": 3,
+    "backgroundColor": "rgba(0,0,0,0.5)"
+  }'
+```
 
-**Tashkeel (تشكيل النص)**
-| Setting | Description |
-|---------|-------------|
-| `enableTashkeel: true` (default) | يطلب Gemini تشكيلاً انتقائياً (نصف تشكيل: فتحة/ضمة/كسرة فقط) على الكلمات الغامضة في السرد لتحسين نطق TTS. التشكيل **للصوت فقط** — الترجمة على الفيديو تبقى نظيفة بدون حركات. |
-| `enableTashkeel: false` | السرد بدون تشكيل كما هو سابقاً. |
+**④ قراءة الطلب من ملف JSON بدل الكتابة الطويلة:**
+```bash
+# أنشئ ملف payload.json بالمحتوى السابق ثم:
+curl -X POST http://localhost:8282/api/generate \
+  -H 'Content-Type: application/json' \
+  -d @payload.json
+```
 
-**Fonts**
-| `fontName` | Font | Notes |
-|------------|------|-------|
-| `NotoSansArabic` | Noto Sans Arabic | **Default (only font)** — شامل ومقروء |
+> `platforms` يحدد **أي المنصات تُولَّد أوصافها** — إذا حذفته فتُولَّد أوصاف للأربع كلها، وإذا أرسلته فارغاً `[]` فالفيديو فقط بدون أوصاف.
 
-All fonts are bundled locally in `backend/fonts/` (SIL OFL license — commercial use OK) and burned in via libass/ASS, so no system font installation is needed. See [`backend/FONTS.md`](backend/FONTS.md) for details.
+---
 
-**Response**
+#### مثال الاستجابة
+
 ```json
 {
-  "jobId":      "e2a3e447-...",
-  "title":      "الماء سر الحياة: فوائد مذهلة!",
-  "videoUrl":   "http://your-host/output/e2a3e447-....mp4",
-  "downloadUrl":"http://your-host/output/e2a3e447-....mp4",
-  "statusUrl":  "http://your-host/api/status/e2a3e447-...",
+  "jobId": "e2a3e447-...",
+  "title": "الماء سر الحياة: فوائد مذهلة!",
+  "videoUrl": "http://your-host/output/e2a3e447-....mp4",
+  "downloadUrl": "http://your-host/output/e2a3e447-....mp4",
+  "statusUrl": "http://your-host/api/status/e2a3e447-...",
   "subtitlesUrl": "http://your-host/output/e2a3e447-....srt",
   "metadata": {
     "ttsType": "edge",
     "subtitleMode": "word",
     "enableSubtitles": true,
     "enableTashkeel": true,
-    "wordCount": 150,
-    "duration": 20.9,
+    "wordCount": 30,
+    "duration": 20.5,
     "fontName": "NotoSansArabic",
     "fontSize": null,
     "fontColor": "white",
@@ -149,146 +203,162 @@ All fonts are bundled locally in `backend/fonts/` (SIL OFL license — commercia
     "backgroundColor": null
   },
   "captions": {
-    "tt": { "caption": "...", "hashtags": [] },
-    "yt": { "caption": "...", "hashtags": [] }
+    "tt": { "caption": "...", "hashtags": ["#ماء", "..."] },
+    "yt": { "caption": "...", "hashtags": ["#ماء", "..."] }
   }
 }
 ```
 
-> **TTS engines** — `edge` (default) uses Microsoft Edge TTS via `node-edge-tts`, needs **no API key** and returns precise word-level timings for animated subtitles. `google` keeps the legacy Google Cloud TTS path (requires `GOOGLE_TTS_KEY`). Edge voice names accept short forms like `ar-SA-Zariyah` (auto-appends `Neural`).
+> `captions` يحتوي أوصاف المنصات التي حددتها في الطلب فقط — إذا لم تحدد أي منصة فسيكون فارغاً `{}`.
 
 ---
 
-### `GET /api/status/:jobId`
-Check the status of a running or completed job.
+### `GET /api/status/:jobId` — متابعة المهمة
 
-**Response — while processing**
+استخدم الـ `jobId` من الاستجابة السابقة لمعرفة حالة المهمة:
+
+```bash
+curl http://localhost:8282/api/status/e2a3e447-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+**أثناء المعالجة:**
 ```json
 { "status": "processing", "step": "🤖 Gemini يولّد السكريبت..." }
 ```
 
-**Response — done**
+**عند الاكتمال:**
 ```json
 { "status": "done", "title": "...", "videoUrl": "/output/....mp4", ... }
 ```
 
-**Response — error**
+**عند الخطأ:**
 ```json
 { "status": "error", "message": "..." }
 ```
 
 ---
 
-### `GET /api/health`
+### `GET /api/health` — فحص الصحة
+
+```bash
+curl http://localhost:8282/api/health
+```
+
+**الاستجابة:**
 ```json
 { "status": "ok" }
 ```
 
 ---
 
-## Push to Docker Hub (CI/CD)
+## متغيرات البيئة 🔧
 
-The repository includes a **GitHub Actions** workflow (`.github/workflows/docker-publish.yml`) that automatically builds and pushes to Docker Hub on every push to `main`.
+أنشئ ملف `backend/.env` (مُستثنى من git):
 
-To enable it:
-1. Add these **secrets** to your GitHub repo (Settings → Secrets and variables → Actions):
-   - `DOCKERHUB_USERNAME` — your Docker Hub username
-   - `DOCKERHUB_TOKEN` — a Docker Hub access token
-2. Push to `main` — the action builds and tags as `yourusername/arabic-shorts-generator:latest`
+```env
+GEMINI_API_KEY=your_gemini_key
+PEXELS_API_KEY=your_pexels_key
+# GOOGLE_TTS_KEY=your_google_tts_key   # فقط إذا استخدمت ttsType: "google"
+# GEMINI_MODEL=gemini-2.5-flash        # اختياري — يفرض نموذجاً محدداً بدل السلسلة الافتراضية
+```
 
-Then on any server:
+| المتغير | مطلوب؟ | الوصف |
+|---------|--------|-------|
+| `GEMINI_API_KEY` | ✅ | مفتاح Google Gemini (السيناريو والأوصاف) |
+| `PEXELS_API_KEY` | ✅ | مفتاح Pexels (صور الخلفية) |
+| `GOOGLE_TTS_KEY` | ❌ | مطلوب فقط عند استخدام `ttsType: "google"` |
+| `GEMINI_MODEL` | ❌ | نموذج محدد؛ يُجرَّب أولاً قبل سلسلة النماذج الافتراضية |
+| `PORT` | ❌ | منفذ الخادم (افتراضي: 3001) |
+
+> **سلسلة النماذج الافتراضية** في `gemini.js`: تُجرَّب بالترتيب `gemini-2.5-flash` ← `gemini-2.0-flash` ← `gemini-2.0-flash-lite`، مع إعادة محاولة تلقائية عند ضغط الاستخدام.
+
+---
+
+## بنية المشروع 📁
+
+```
+arabic-shorts-generator/
+├── Dockerfile                # صورة واحدة متكاملة (nginx + node + ffmpeg)
+├── docker-compose.yml        # تشغيل بأمر واحد
+├── .env.example              # قالب المفاتيح
+├── deploy.sh                 # سكربت نشر على خادم (رفع + تطبيق فوري)
+├── .github/workflows/
+│   └── docker-publish.yml    # بناء ونشر تلقائي إلى Docker Hub عند كل push
+│
+├── backend/                  # الخادم الرئيسي
+│   ├── server.js             # واجهة Express API (توليد، حالة، صحة)
+│   ├── package.json
+│   ├── nginx.conf            # إعداد nginx (مهلة 600 ثانية)
+│   ├── supervisord.conf      # إدارة عمليتي nginx + node
+│   ├── Dockerfile            # صورة بديلة (نفس البنية)
+│   │
+│   ├── services/
+│   │   ├── gemini.js         # السيناريو والأوصاف عبر Gemini
+│   │   ├── tts.js            # مدخل الصوت الموحد (Edge + Google القديم)
+│   │   ├── edge_tts.js       # Edge TTS + توقيت كل كلمة
+│   │   ├── word_aligner.js   # محاذاة الكلمات + بناء ASS/SRT (3 أنماط)
+│   │   ├── pexels.js         # البحث عن صور الخلفية
+│   │   └── renderer.js       # بناء الفيديو (Ken Burns + ترجمة + الخطوط)
+│   │
+│   ├── fonts/                # الخط العربي المضمّن (Noto Sans Arabic)
+│   │   └── README.md         # مصدر الخط وترخيصه
+│   │
+│   ├── FONTS.md              # مرجع خط الـ API
+│   │
+│   ├── public/
+│   │   └── index.html        # الواجهة العربية (نسخة العمل الرئيسية)
+│   │
+│   ├── output/               # ملفات الفيديو (تُحذف تلقائياً بعد 48 ساعة)
+│   ├── temp/                 # ملفات مؤقتة (صوت/صور)
+│   └── data/                 # حفظ حالات المهام (jobs.json)
+│
+├── frontend/                 # واجهة بديلة (حاوية nginx مستقلة)
+│   ├── Dockerfile
+│   ├── nginx.conf            # يعيد التوجيه إلى خادم الواجهة الخلفية
+│   └── index.html            # نفس الواجهة (نسخة مكررة)
+│
+└── .gitignore
+```
+
+> نسختا الواجهة (`backend/public/index.html` و `frontend/index.html`) متطابقتان — تُحدَّثان معاً.
+
+---
+
+## النشر على Docker Hub (CI/CD) ⚙️
+
+يوجد workflow جاهز (`docker-publish.yml`) يبني الصورة ويرفعها إلى Docker Hub تلقائياً عند كل push إلى `main`.
+
+لتفعيله:
+1. أضف سرّين في GitHub (Settings → Secrets → Actions):
+   - `DOCKERHUB_USERNAME` — اسم مستخدم Docker Hub
+   - `DOCKERHUB_TOKEN` — رمز وصول من Docker Hub
+2. ادفع إلى `main` — سيُبنى ويُرفع بوسم `yourusername/arabic-shorts-generator:latest`
+
+ثم على أي خادم:
+
 ```bash
 docker run -d \
   --name arabic-shorts \
   -p 8282:80 \
   -e GEMINI_API_KEY=your_key \
-  -e GOOGLE_TTS_KEY=your_key \
   -e PEXELS_API_KEY=your_key \
+  -e GOOGLE_TTS_KEY=your_key \
   yourusername/arabic-shorts-generator:latest
 ```
 
 ---
 
-## Project Structure
+## ملاحظات 📌
 
-```
-arabic-shorts-generator/
-├── Dockerfile                # Single combined image (nginx + node + ffmpeg)
-├── docker-compose.yml        # One-command deployment
-├── .env.example              # Template for API keys
-├── .github/workflows/
-│   └── docker-publish.yml    # Auto-build & push to Docker Hub on push
-│
-├── backend/
-│   ├── server.js             # Express API (3 endpoints: generate, status, health)
-│   ├── package.json
-│   ├── nginx.conf            # Reverse proxy config (600s timeout)
-│   ├── supervisord.conf      # Manages nginx + node processes
-│   ├── Dockerfile            # Alternative base image (same structure)
-│   │
-│   ├── services/
-│   │   ├── gemini.js         # Script + captions generation via Google Gemini
-│   │   ├── tts.js            # Unified TTS entry (Edge TTS + legacy Google TTS)
-│   │   ├── edge_tts.js       # Edge TTS via node-edge-tts + word-level timings
-│   │   ├── word_aligner.js   # Word timing alignment + ASS/SRT builders (3 subtitle modes + font styling)
-│   │   ├── pexels.js         # Background image search via Pexels
-│   │   └── renderer.js       # FFmpeg video builder (Ken Burns + ASS subtitles + fontsdir)
-│   │
-│   ├── fonts/                # Bundled Arabic font (Noto Sans Arabic)
-│   │   └── README.md         # Font sources + licenses
-│   │
-│   ├── FONTS.md              # Font options reference for the API
-│   │
-│   ├── public/
-│   │   └── index.html        # Frontend UI (Arabic interface)
-│   │
-│   ├── output/               # Generated MP4 files (auto-cleaned after 48h)
-│   ├── temp/                 # Temporary audio/image segments
-│   └── data/                 # Job persistence (jobs.json)
-│
-├── frontend/
-│   ├── Dockerfile            # Standalone nginx container (alternative)
-│   └── index.html            # Same UI (alternative deployment)
-│
-└── deploy.sh                 # Production deploy script (VPS with hot-reload)
-```
+- التوليد **متزامن** — يبقى الطلب مفتوحاً حتى جاهزية الفيديو (حتى 3 دقائق). اجعل مهلة الـ HTTP طويلة كفاية.
+- الملفات المُولَّدة **تُحذف تلقائياً بعد 48 ساعة** لتوفير مساحة القرص.
+- داخل الحاوية يعمل **nginx (منفذ 80)** كوسيط أمام **Node.js (منفذ 3001)**، ويديرهما **supervisord**.
+- الترجمة العربية تُرسم عبر ASS/libass بالخط المضمّن — لا حاجة لتثبيت خطوط على النظام.
+- حالة المهام **تُحفظ على القرص** (`backend/data/jobs.json`) — إعادة تشغيل الخادم لا تُفقد المهام الجارية.
 
 ---
 
-## Environment Variables
+## الترخيص 📄
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GEMINI_API_KEY` | ✅ | Google Gemini API key (script + captions) |
-| `PEXELS_API_KEY` | ✅ | Pexels API key (background images) |
-| `GOOGLE_TTS_KEY` | ❌ | Only needed if using `ttsType: "google"` (legacy voiceover) |
-| `GEMINI_MODEL` | ❌ | Gemini model override (e.g. `gemini-3.1-flash-lite`); tried before the default fallback chain |
-| `PORT` | ❌ | Backend port (default: 3001) |
-
-Create `backend/.env` (already in `.gitignore`):
-```env
-GEMINI_API_KEY=your_gemini_key
-GOOGLE_TTS_KEY=your_google_tts_key
-PEXELS_API_KEY=your_pexels_key
-GEMINI_MODEL=gemini-3.1-flash-lite   # optional
-```
-
----
-
-## Requirements
-
-| Service | Used for | Free tier? |
-|---------|----------|------------|
-| [Google Gemini API](https://aistudio.google.com/) | Script + captions | ✅ Yes |
-| [Google Cloud TTS](https://cloud.google.com/text-to-speech) | Arabic voiceover | ✅ 1M chars/month |
-| [Pexels API](https://www.pexels.com/api/) | Background images | ✅ Yes |
-
----
-
-## Notes
-
-- Video generation is **synchronous** — the request stays open until the video is ready (up to 3 min). Make sure your HTTP client has a long enough timeout.
-- Generated videos are **auto-deleted after 48 hours** to save disk space.
-- The container runs **nginx** (port 80) as a reverse proxy in front of **Node.js** (port 3001), managed by **supervisord**.
-- Arabic subtitles use bundled fonts (`backend/fonts/`, default **Noto Sans Arabic**) rendered via ASS/libass — no system font install needed; the Dockerfile copies `backend/fonts/` into the image.
-- Job state is **persisted to disk** (`backend/data/jobs.json`) — restarts won't lose in-progress jobs.
+- الكود: استخدمه بحرية.
+- الخطوط المضمّنة بترخيص **SIL OFL 1.1** (استخدام تجاري مسموح) — التفاصيل في [`backend/fonts/README.md`](backend/fonts/README.md).
