@@ -52,11 +52,11 @@ function validatePlatforms(platforms) {
 }
 
 // ─── Font validation ─────────────────────────────────────────────────────────
-const VALID_FONTS = ["Cairo", "Tajawal", "IBMPlexSansArabic", "NotoSansArabic"];
+const VALID_FONTS = ["NotoSansArabic"];
 const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 function sanitizeFontOptions(options = {}) {
-  const fontName = VALID_FONTS.includes(options.fontName) ? options.fontName : "Cairo";
+  const fontName = VALID_FONTS.includes(options.fontName) ? options.fontName : "NotoSansArabic";
   const fontSize =
     options.fontSize != null &&
     Number.isFinite(Number(options.fontSize)) &&
@@ -168,7 +168,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
  * Body:     { topic: string, platforms?: ["tt","yt","fb","ig"],
  *             ttsType?: "edge"|"google", subtitleMode?: "word"|"sentence"|"progressive",
  *             enableSubtitles?: boolean, enableTashkeel?: boolean, voice?: string,
- *             fontName?: "Cairo"|"Tajawal"|"IBMPlexSansArabic"|"NotoSansArabic",
+ *             fontName?: "NotoSansArabic",
  *             fontSize?: number (20-160), fontColor?: "#RRGGBB"|name,
  *             borderColor?: "#RRGGBB"|name, borderWidth?: number (0-12),
  *             backgroundColor?: "#RRGGBB"|"rgba(...)"|null }
@@ -179,7 +179,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
  * platforms defaults to ["tt","yt","fb","ig"] if omitted.
  * ttsType defaults to "edge"; subtitleMode defaults to "word"; enableSubtitles defaults to true.
  * enableTashkeel defaults to true (selective diacritics for TTS pronunciation; on-screen subtitles stay clean).
- * fontName defaults to "Cairo"; borderWidth defaults to 5; fontColor "white"; borderColor "black".
+ * fontName defaults to "NotoSansArabic"; borderWidth defaults to 5; fontColor "white"; borderColor "black".
  * Takes ~1-3 minutes depending on video length.
  */
 app.post("/api/generate", videoRouteHandler);

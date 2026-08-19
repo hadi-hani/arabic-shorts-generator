@@ -47,15 +47,12 @@ function getKenBurnsFilter(type, duration, fps = 25) {
 // ── Bundled Arabic fonts (backend/fonts) ─────────────────────────────────
 // Font names are matched by fontconfig family name (libass resolves via fontsdir).
 const FONT_MAP = {
-  "Cairo":             { family: "Cairo",                file: "Cairo-Bold.ttf" },
-  "Tajawal":           { family: "Tajawal",              file: "Tajawal-Bold.ttf" },
-  "IBMPlexSansArabic": { family: "IBM Plex Sans Arabic", file: "IBMPlexSansArabic-Bold.ttf" },
-  "NotoSansArabic":    { family: "Noto Sans Arabic",     file: "NotoSansArabic.ttf" }
+  "NotoSansArabic": { family: "Noto Sans Arabic", file: "NotoSansArabic.ttf" }
 };
 
 function resolveFont(fontName) {
   const key = String(fontName || "").replace(/\s+/g, "");
-  const entry = FONT_MAP[key] || FONT_MAP["Cairo"];
+  const entry = FONT_MAP[key] || FONT_MAP["NotoSansArabic"];
   const file = path.join(__dirname, "../fonts", entry.file);
   if (!fs.existsSync(file)) {
     console.warn(`⚠️ Font file missing: ${file} — falling back to fontconfig`);

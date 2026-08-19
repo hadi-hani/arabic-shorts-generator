@@ -88,7 +88,7 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
   "subtitleMode": "word",                   // optional — "word" | "sentence" | "progressive" (default: word)
   "enableSubtitles": true,                  // optional — true | false (default: true)
   "voice": "ar-SA-Zariyah",                 // optional — TTS voice (Edge: ar-SA-* names, Google: male/female)
-  "fontName": "Cairo",                      // optional — "Cairo" | "Tajawal" | "IBMPlexSansArabic" | "NotoSansArabic" (default: Cairo)
+  "fontName": "NotoSansArabic",              // optional — only "NotoSansArabic" (default: NotoSansArabic)
   "fontSize": null,                         // optional — 20-160; omitted = auto per word (default: auto)
   "fontColor": "white",                     // optional — "#RRGGBB" or name (white/yellow/black/...) (default: white)
   "borderColor": "black",                   // optional — "#RRGGBB" or name (default: black)
@@ -121,10 +121,7 @@ Generates a complete short video. Takes **1–3 minutes** depending on length.
 **Fonts**
 | `fontName` | Font | Notes |
 |------------|------|-------|
-| `Cairo` | Cairo | **Default** — عصري واحترافي |
-| `Tajawal` | Tajawal | شائع في الفيديوهات |
-| `IBMPlexSansArabic` | IBM Plex Sans Arabic | احترافي |
-| `NotoSansArabic` | Noto Sans Arabic | شامل ومقروء |
+| `NotoSansArabic` | Noto Sans Arabic | **Default (only font)** — شامل ومقروء |
 
 All fonts are bundled locally in `backend/fonts/` (SIL OFL license — commercial use OK) and burned in via libass/ASS, so no system font installation is needed. See [`backend/FONTS.md`](backend/FONTS.md) for details.
 
@@ -144,7 +141,7 @@ All fonts are bundled locally in `backend/fonts/` (SIL OFL license — commercia
     "enableTashkeel": true,
     "wordCount": 150,
     "duration": 20.9,
-    "fontName": "Cairo",
+    "fontName": "NotoSansArabic",
     "fontSize": null,
     "fontColor": "white",
     "borderColor": "black",
@@ -237,7 +234,7 @@ arabic-shorts-generator/
 │   │   ├── pexels.js         # Background image search via Pexels
 │   │   └── renderer.js       # FFmpeg video builder (Ken Burns + ASS subtitles + fontsdir)
 │   │
-│   ├── fonts/                # Bundled Arabic fonts (Cairo, Tajawal, IBM Plex, Noto)
+│   ├── fonts/                # Bundled Arabic font (Noto Sans Arabic)
 │   │   └── README.md         # Font sources + licenses
 │   │
 │   ├── FONTS.md              # Font options reference for the API
@@ -293,5 +290,5 @@ GEMINI_MODEL=gemini-3.1-flash-lite   # optional
 - Video generation is **synchronous** — the request stays open until the video is ready (up to 3 min). Make sure your HTTP client has a long enough timeout.
 - Generated videos are **auto-deleted after 48 hours** to save disk space.
 - The container runs **nginx** (port 80) as a reverse proxy in front of **Node.js** (port 3001), managed by **supervisord**.
-- Arabic subtitles use bundled fonts (`backend/fonts/`, default **Cairo**) rendered via ASS/libass — no system font install needed; the Dockerfile copies `backend/fonts/` into the image.
+- Arabic subtitles use bundled fonts (`backend/fonts/`, default **Noto Sans Arabic**) rendered via ASS/libass — no system font install needed; the Dockerfile copies `backend/fonts/` into the image.
 - Job state is **persisted to disk** (`backend/data/jobs.json`) — restarts won't lose in-progress jobs.

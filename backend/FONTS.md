@@ -1,23 +1,20 @@
 # الخطوط العربية المدعومة
 
-يدعم مولّد الفيديو 5 خطوط عربية احترافية تُحرق على الفيديو عبر libass (ASS subtitles).
-الخطوط مضمّنة محلياً في `backend/fonts/` فلا يحتاج النظام إلى تثبيتها.
+يدعم مولّد الفيديو خطاً عربياً واحداً احترافياً يُحرق على الفيديو عبر libass (ASS subtitles).
+الخط مضمّن محلياً في `backend/fonts/` فلا يحتاج النظام إلى تثبيته.
 
-## الخطوط المتاحة
+## الخط المتاح
 
 | القيمة (API) | الخط | النوع |
 |--------------|------|-------|
-| `Cairo` | Cairo — عصري واحترافي | **افتراضي** |
-| `Tajawal` | Tajawal — شائع في الفيديوهات | |
-| `IBMPlexSansArabic` | IBM Plex Sans Arabic — احترافي | |
-| `NotoSansArabic` | Noto Sans Arabic — شامل ومقروء | |
+| `NotoSansArabic` | Noto Sans Arabic — شامل ومقروء | **افتراضي (الوحيد)** |
 
 ## الاستخدام في API
 
 ```json
 {
   "topic": "٣ نصائح لتصوير الفيديو بالهاتف",
-  "fontName": "Tajawal",
+  "fontName": "NotoSansArabic",
   "fontSize": 60,
   "fontColor": "#FFD700",
   "borderColor": "#000000",
@@ -30,7 +27,7 @@
 
 | الحقل | الافتراضي | المدى/القيم |
 |-------|-----------|-------------|
-| `fontName` | `Cairo` | `Cairo` \| `Tajawal` \| `IBMPlexSansArabic` \| `NotoSansArabic` |
+| `fontName` | `NotoSansArabic` | `NotoSansArabic` (الوحيد) |
 | `fontSize` | تلقائي (حسب طول النص) | عدد صحيح من 20 إلى 160 — عند الحذف يبقى تلقائياً |
 | `fontColor` | `white` | لون: `#RRGGBB` أو اسم (white/black/yellow/red/green/blue/gold) |
 | `borderColor` | `black` | لون: `#RRGGBB` أو اسم |

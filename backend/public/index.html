@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Arabic Shorts Generator</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     :root{
@@ -30,7 +30,7 @@
     html{scroll-behavior:smooth}
     body{
       background:var(--bg);color:var(--text);
-      font-family:'Cairo',sans-serif;
+      font-family:'Noto Sans Arabic',sans-serif;
       min-height:100vh;display:flex;flex-direction:column;
     }
 
@@ -91,7 +91,7 @@
       width:100%;
       background:var(--surface2);border:1.5px solid var(--border2);
       border-radius:var(--radius);color:var(--text);
-      font-family:'Cairo',sans-serif;font-size:.92rem;
+      font-family:'Noto Sans Arabic',sans-serif;font-size:.92rem;
       padding:13px 15px;resize:vertical;min-height:105px;
       outline:none;transition:border-color .2s;
       direction:rtl;text-align:right;line-height:1.8;
@@ -109,7 +109,7 @@
       width:100%;
       background:var(--surface2);border:1.5px solid var(--border2);
       border-radius:var(--radius);color:var(--text);
-      font-family:'Cairo',sans-serif;font-size:.88rem;
+      font-family:'Noto Sans Arabic',sans-serif;font-size:.88rem;
       padding:12px 14px;outline:none;transition:border-color .2s;
     }
     select:focus{border-color:var(--accent)}
@@ -160,7 +160,7 @@
       border:1.5px solid var(--border2);
       background:var(--surface2);
       color:var(--muted);
-      font-family:'Cairo',sans-serif;font-size:.8rem;font-weight:600;
+      font-family:'Noto Sans Arabic',sans-serif;font-size:.8rem;font-weight:600;
       cursor:pointer;transition:all .18s;user-select:none;
     }
     .plat-btn:hover{border-color:var(--border3);color:var(--text);background:var(--surface3)}
@@ -193,7 +193,7 @@
       width:100%;padding:14px;
       background:linear-gradient(135deg,#c9a84c 0%,#e8c56a 100%);
       color:#0c0c0f;border:none;border-radius:var(--radius);
-      font-family:'Cairo',sans-serif;font-size:.98rem;font-weight:900;
+      font-family:'Noto Sans Arabic',sans-serif;font-size:.98rem;font-weight:900;
       cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
       transition:opacity .2s,transform .1s;
       box-shadow:0 3px 18px rgba(201,168,76,.28);
@@ -239,7 +239,7 @@
     .dbtn{
       font-size:.7rem;color:var(--muted);background:var(--surface2);
       border:1px solid var(--border2);cursor:pointer;
-      font-family:'Cairo',sans-serif;padding:2px 9px;
+      font-family:'Noto Sans Arabic',sans-serif;padding:2px 9px;
       border-radius:6px;transition:all .15s;
     }
     .dbtn:hover{color:var(--text)}
@@ -304,7 +304,7 @@
       padding:10px 0;
       background:linear-gradient(135deg,#22c55e,#16a34a);
       color:#fff;border:none;border-radius:var(--radius);
-      font-family:'Cairo',sans-serif;font-size:.85rem;font-weight:700;cursor:pointer;
+      font-family:'Noto Sans Arabic',sans-serif;font-size:.85rem;font-weight:700;cursor:pointer;
       transition:opacity .2s;
     }
     #dlbtn:hover{opacity:.88}
@@ -358,7 +358,7 @@
       width:100%;padding:5px 0;border-radius:6px;
       background:#1a1507;color:var(--accent);
       border:1px solid var(--accent-border);
-      font-family:'Cairo',sans-serif;font-size:.72rem;font-weight:600;
+      font-family:'Noto Sans Arabic',sans-serif;font-size:.72rem;font-weight:600;
       cursor:pointer;transition:all .18s;
     }
     .copy-btn:hover{background:#231c09}
@@ -477,14 +477,6 @@
 
     <!-- FONT & STYLE -->
     <div>
-      <div class="field-label">الخط</div>
-      <select id="font-name">
-        <option value="Cairo">Cairo (افتراضي)</option>
-        <option value="Tajawal">Tajawal</option>
-        <option value="IBMPlexSansArabic">IBM Plex Sans Arabic</option>
-        <option value="NotoSansArabic">Noto Sans Arabic</option>
-      </select>
-
       <div class="style-row">
         <div class="style-field">
           <div class="field-label">حجم الخط <span class="style-val" id="fs-val">تلقائي</span></div>
@@ -657,7 +649,6 @@ updateFsVal();
 
 function getFontOptions() {
   return {
-    fontName: document.getElementById('font-name').value,
     fontSize: fsAuto.checked ? null : parseInt(fsSlider.value, 10),
     fontColor: document.getElementById('font-color').value,
     borderColor: document.getElementById('border-color').value,
