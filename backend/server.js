@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const fs = require("fs");
 const { generateScript, generateCaptions, PLATFORM_CONFIGS } = require("./services/gemini");
-const { generateAllAudio, generateSceneAudio } = require("./services/tts");
+const { generateFullNarration } = require("./services/tts");
 const { fetchAllImages }   = require("./services/pexels");
 const { renderVideo }      = require("./services/renderer");
 
@@ -108,9 +108,9 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
   const imageUrls = await fetchAllImages(script.scenes);
 
   setJob(jobId, { status: "processing", step: `🔊 توليد الصوت (${ttsType})...`, platforms });
-  const { audioPaths, timingsList } = await generateSceneAudio(script.scenes, jobId, {
+  const { audioPaths, timingsList, engine } = await generateFullNarration(script.scenes, jobId, {
     ttsType,
-    voice: ttsType === "edge" ? (voice || "default") : (voice || "male"),
+    voice: ttsType === "edge" ? (voice || "default") : (voice || undefined),
     speakingRate: 0.95
   });
 
@@ -141,7 +141,7 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
     videoUrl: `/output/${jobId}.mp4`,
     videoPath: finalPath,
     subtitlesUrl: srtPath ? `/output/${jobId}.srt` : null,
-    metadata: { ttsType, subtitleMode, enableSubtitles, enableTashkeel, wordCount, duration, ...fontOptions },
+    metadata: { ttsType: engine || ttsType, subtitleMode, enableSubtitles, enableTashkeel, wordCount, duration, ...fontOptions },
     scenes: script.scenes.map((sc, i) => ({ ...sc, imageUrl: imageUrls[i], audioUrl: audioUrls[i] })),
     platforms: script.platforms || {}
   };
@@ -174,7 +174,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 /**
  * POST /api/generate  (also aliased as /api/video for backward compatibility)
  * Body:     { topic: string, platforms?: ["tt","yt","fb","ig"],
- *             ttsType?: "edge"|"google", subtitleMode?: "word"|"sentence"|"progressive",
+ *             ttsType?: "edge"|"google"|"kokoro"|"piper", subtitleMode?: "word"|"sentence"|"progressive",
  *             enableSubtitles?: boolean, enableTashkeel?: boolean, voice?: string,
  *             fontName?: "NotoSansArabic",
  *             fontSize?: number (20-160), fontColor?: "#RRGGBB"|name,
@@ -201,7 +201,7 @@ async function videoRouteHandler(req, res) {
   const jobId = uuidv4();
 
   const options = {
-    ttsType: ttsType === "google" ? "google" : "edge",
+    ttsType: ["edge", "google", "kokoro", "piper"].includes(ttsType) ? ttsType : "edge",
     subtitleMode: ["word", "sentence", "progressive"].includes(subtitleMode) ? subtitleMode : "word",
     enableSubtitles: enableSubtitles !== false,
     enableTashkeel: enableTashkeel !== false,

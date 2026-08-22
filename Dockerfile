@@ -8,10 +8,13 @@ RUN npm install --production
 FROM node:20-alpine
 
 # System dependencies: nginx, ffmpeg, supervisor, Arabic fonts, CA certificates,
-# python3 for edge-tts (word-level timing via WordBoundary metadata)
+# python3 for edge-tts / kokoro / piper (word-level timing + offline TTS)
 RUN apk add --no-cache nginx ffmpeg ttf-dejavu fontconfig supervisor \
-    font-noto font-noto-arabic ca-certificates python3 py3-pip && fc-cache -fv \
-    && pip3 install --break-system-packages --no-cache-dir edge-tts
+    font-noto font-noto-arabic ca-certificates python3 py3-pip espeak-ng && fc-cache -fv \
+    && pip3 install --break-system-packages --no-cache-dir \
+        edge-tts \
+        kokoro soundfile onnxruntime numpy misaki \
+        piper-tts
 
 WORKDIR /app
 

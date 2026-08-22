@@ -148,7 +148,7 @@ Return ONLY valid JSON, no markdown, no extra text:
   "hashtags": ["#tag1", "#tag2"]${platformsJsonExample}
 }
 ${tashkeelBlock}
-IMPORTANT: Split the narration into SHORT sentences — each sentence (5-8 words max) becomes its own scene. Create 4-6 scenes total so the full video stays under 50 seconds (ideally 35-45 seconds). Each scene narration must be a single short sentence in Arabic. Keep duration 6-8 seconds per scene.`;
+IMPORTANT: Split the narration into SHORT sentences — each sentence (5-8 words max) becomes its own scene. Create AS MANY scenes as needed to cover the topic thoroughly (between 8 and 20 scenes). Aim for a TOTAL video length of 45-90 seconds (roughly 6-9 seconds per scene). Do NOT artificially limit the number of scenes to keep the video short — let the content dictate the length. Each scene narration must be a single short sentence in Arabic.`;
 
   return callGemini(prompt);
 }
