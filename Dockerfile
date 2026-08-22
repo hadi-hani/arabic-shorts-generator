@@ -5,16 +5,26 @@ COPY backend/package.json .
 RUN npm install --production
 
 # Stage 2: final image
-FROM node:20-alpine
+# glibc base (Debian) is REQUIRED: torch / kokoro ship only manylinux wheels,
+# which do not install on Alpine (musl). Python 3.11 here also lets
+# kokoro's curated-tokenizers build cleanly.
+FROM node:20-bookworm
 
 # System dependencies: nginx, ffmpeg, supervisor, Arabic fonts, CA certificates,
-# python3 for edge-tts / kokoro / piper (word-level timing + offline TTS)
-RUN apk add --no-cache nginx ffmpeg ttf-dejavu fontconfig supervisor \
-    font-noto font-noto-arabic ca-certificates python3 py3-pip espeak-ng && fc-cache -fv \
-    && pip3 install --break-system-packages --no-cache-dir \
-        edge-tts \
-        kokoro soundfile onnxruntime numpy misaki \
-        piper-tts
+# python3 for edge-tts / kokoro(Nabra) / piper, git for the kokoro pip fork.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nginx ffmpeg fontconfig supervisor ca-certificates \
+        fonts-noto-core fonts-noto-arabic \
+        python3 python3-pip python3-venv git espeak-ng \
+    && fc-cache -fv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python TTS deps. CPU-only torch keeps the image smaller.
+RUN pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip3 install --no-cache-dir \
+        "kokoro @ git+https://github.com/Oddadmix/kokoro.git@main" \
+        soundfile huggingface_hub misaki \
+        edge-tts piper-tts
 
 WORKDIR /app
 
