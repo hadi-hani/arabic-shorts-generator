@@ -9,6 +9,7 @@ const { fetchAllImages }   = require("./services/pexels");
 const { renderVideo }      = require("./services/renderer");
 
 const app = express();
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 app.use("/output", express.static(path.join(__dirname, "output")));
