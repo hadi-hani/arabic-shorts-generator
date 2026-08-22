@@ -223,7 +223,13 @@ curl http://localhost:8282/api/health
 GEMINI_API_KEY=your_gemini_key
 PEXELS_API_KEY=your_pexels_key
 # GOOGLE_TTS_KEY=your_google_tts_key   # فقط إذا استخدمت ttsType: "google"
-# GEMINI_MODEL=gemini-2.5-flash        # اختياري — يفرض نموذجاً محدداً بدل السلسلة الافتراضية
+# GEMINI_MODEL=gemini-2.5-flash        # اختياري — يفرض نموذجاّ محدداً بدل السلسلة الافتراضية
+
+# رابط الـ API العام (مهم جداً للنشر على خادم حقيقي):
+# PUBLIC_BASE_URL=https://shorts.example.com
+
+# مدة بقاء الفيديوهات قبل الحذف التلقائي بالساعات (الافتراضي: 24)
+# VIDEO_TTL_HOURS=24
 ```
 
 | المتغير | مطلوب؟ | الوصف |
@@ -232,6 +238,8 @@ PEXELS_API_KEY=your_pexels_key
 | `PEXELS_API_KEY` | ✅ | مفتاح Pexels (صور الخلفية) |
 | `GOOGLE_TTS_KEY` | ❌ | مطلوب فقط عند استخدام `ttsType: "google"` |
 | `GEMINI_MODEL` | ❌ | نموذج محدد؛ يُجرَّب أولاً قبل سلسلة النماذج الافتراضية |
+| `PUBLIC_BASE_URL` | ❌ | **مهم!** الرابط العام للمشروع (مثل `https://shorts.example.com`). بدونه تُستخدم `req.protocol + req.host` التي قد تكون خاطئة خلف reverse proxy |
+| `VIDEO_TTL_HOURS` | ❌ | عدد الساعات قبل حذف الفيديو تلقائياً (الافتراضي: 24). الصفر = غير مُحدّد |
 | `PORT` | ❌ | منفذ الخادم (افتراضي: 3001) |
 
 > **سلسلة النماذج الافتراضية** في `gemini.js`: تُجرَّب بالترتيب `gemini-2.5-flash` ← `gemini-2.0-flash` ← `gemini-2.0-flash-lite`، مع إعادة محاولة تلقائية عند ضغط الاستخدام.
@@ -307,6 +315,11 @@ docker run -d \
   -e GEMINI_API_KEY=your_key \
   -e PEXELS_API_KEY=your_key \
   -e GOOGLE_TTS_KEY=your_key \
+  -e PUBLIC_BASE_URL=https://shorts.example.com \
+  -e VIDEO_TTL_HOURS=24 \
+  -v $(pwd)/backend/output:/app/output \
+  -v $(pwd)/backend/temp:/app/temp \
+  -v $(pwd)/backend/data:/app/data \
   yourusername/arabic-shorts-generator:latest
 ```
 
@@ -315,10 +328,11 @@ docker run -d \
 ## ملاحظات 📌
 
 - التوليد **متزامن** — يبقى الطلب مفتوحاً حتى جاهزية الفيديو (حتى 3 دقائق). اجعل مهلة الـ HTTP طويلة كفاية.
-- الملفات المُولَّدة **تُحذف تلقائياً بعد 48 ساعة** لتوفير مساحة القرص.
+- الملفات المُولَّدة **تُحذف تلقائياً بعد 24 ساعة** (أو عدد الساعات المحدد في `VIDEO_TTL_HOURS`) لتوفير مساحة القرص.
 - داخل الحاوية يعمل **nginx (منفذ 80)** كوسيط أمام **Node.js (منفذ 3001)**، ويديرهما **supervisord**.
 - الترجمة العربية تُرسم عبر ASS/libass بالخط المضمّن — لا حاجة لتثبيت خطوط على النظام.
 - حالة المهام **تُحفظ على القرص** (`backend/data/jobs.json`) — إعادة تشغيل الخادم لا تُفقد المهام الجارية.
+- عند استخدام `PUBLIC_BASE_URL` تأكد من أنه يحتوي على بروتوكول كامل (مثل `https://shorts.example.com`) وليس فيه `/` في النهاية.
 
 ---
 
