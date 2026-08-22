@@ -41,8 +41,15 @@ function saveJobs() {
   }
 }
 
+const VIDEO_TTL_MS = (parseInt(process.env.VIDEO_TTL_HOURS, 10) || 24) * 60 * 60 * 1000;
+
 function setJob(jobId, data) {
-  jobs[jobId] = { ...data, createdAt: jobs[jobId]?.createdAt || Date.now() };
+  const createdAt = jobs[jobId]?.createdAt || Date.now();
+  jobs[jobId] = {
+    ...data,
+    createdAt,
+    expiresAt: createdAt + VIDEO_TTL_MS
+  };
   saveJobs();
 }
 
@@ -207,7 +214,7 @@ async function videoRouteHandler(req, res) {
   try {
     const result = await runPipeline(topic, jobId, targetPlatforms, options);
 
-    const base = `${req.protocol}://${req.get("host")}`;
+    const base = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
     const captions = {};
     for (const [platform, data] of Object.entries(result.platforms)) {
       captions[platform] = {
@@ -241,24 +248,44 @@ async function videoRouteHandler(req, res) {
 app.get("/api/status/:jobId", (req, res) => {
   const job = jobs[req.params.jobId];
   if (!job) return res.status(404).json({ error: "Job not found" });
+  if (job.status !== "processing" && job.expiresAt && Date.now() > job.expiresAt) {
+    return res.json({ ...job, status: "expired", message: "انتهت صلاحية الفيديو وحُذف تلقائياً" });
+  }
+  if (job.status === "done") {
+    const videoPath = path.join(__dirname, "output", `${req.params.jobId}.mp4`);
+    if (!fs.existsSync(videoPath)) {
+      return res.json({ ...job, status: "expired", message: "انتهت صلاحية الفيديو وحُذف تلقائياً" });
+    }
+  }
   res.json(job);
 });
 
-// ─── Auto-cleanup output files older than 48h ──────────────────────────────────
-setInterval(() => {
+// ─── Auto-cleanup: delete videos older than VIDEO_TTL_HOURS ───────────────────
+function cleanupExpired() {
   const outputDir = path.join(__dirname, "output");
-  const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+  const now = Date.now();
+  let removed = 0;
+  for (const [id, job] of Object.entries(jobs)) {
+    const expiresAt = job.expiresAt || (job.createdAt ? job.createdAt + VIDEO_TTL_MS : 0);
+    if (expiresAt && now > expiresAt) {
+      for (const ext of [".mp4", ".srt", ".ass", ".json"]) {
+        const fp = path.join(outputDir, id + ext);
+        if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); removed++; } catch (e) {} }
+      }
+      if (job.status !== "expired") { job.status = "expired"; saveJobs(); }
+    }
+  }
+  // fallback: remove any orphaned files older than TTL by mtime
   try {
-    let removed = 0;
     for (const file of fs.readdirSync(outputDir)) {
       const fp = path.join(outputDir, file);
-      if (fs.statSync(fp).mtimeMs < cutoff) { fs.unlinkSync(fp); removed++; }
+      if (fs.statSync(fp).mtimeMs < now - VIDEO_TTL_MS) { fs.unlinkSync(fp); removed++; }
     }
-    if (removed > 0) console.log(`🧹 Auto-cleaned ${removed} old output files`);
-  } catch (e) {
-    console.warn("⚠️ Cleanup error:", e.message);
-  }
-}, 60 * 60 * 1000);
+  } catch (e) {}
+  if (removed > 0) console.log(`🧹 Auto-cleaned ${removed} expired output file(s)`);
+}
+cleanupExpired();
+setInterval(cleanupExpired, 60 * 60 * 1000);
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT}`));

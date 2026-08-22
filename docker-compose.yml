@@ -3,12 +3,14 @@ services:
     build: .
     container_name: arabic-shorts-generator
     ports:
-      - "8282:80"
+      - "127.0.0.1:8282:80"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-placeholder}
       - GOOGLE_TTS_KEY=${GOOGLE_TTS_KEY:-placeholder}
       - PEXELS_API_KEY=${PEXELS_API_KEY:-placeholder}
       - PORT=3001
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
+      - VIDEO_TTL_HOURS=${VIDEO_TTL_HOURS:-24}
     volumes:
       - ./backend/output:/app/output
       - ./backend/temp:/app/temp
