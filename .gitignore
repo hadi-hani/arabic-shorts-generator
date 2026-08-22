@@ -3,5 +3,6 @@ node_modules/
 output/
 temp/
 backend/data/
+backend/models/
 backend/*.log
 backend/.env

@@ -32,8 +32,10 @@ function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const doGet = (u) => {
       https.get(u, { headers: { "User-Agent": "arabic-shorts-generator" } }, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          return doGet(res.headers.location);
+        if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
+          const loc = res.headers.location;
+          const nextUrl = loc.startsWith("http") ? loc : new URL(loc, u).href;
+          return doGet(nextUrl);
         }
         if (res.statusCode !== 200) {
           return reject(new Error(`Download failed (${res.statusCode}): ${u}`));

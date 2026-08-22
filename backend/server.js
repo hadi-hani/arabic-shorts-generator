@@ -288,4 +288,8 @@ cleanupExpired();
 setInterval(cleanupExpired, 60 * 60 * 1000);
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT}`));
+}
+
+module.exports = { runPipeline, app };
