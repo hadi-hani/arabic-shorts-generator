@@ -121,13 +121,13 @@ function stripArabicPunctuation(text) {
     .trim();
 }
 
-/** Prepare text specifically for Piper TTS — strips tashkeel, ?, breaks tags.
- *  Piper mispronounces tashkeel diacritics (adds syllables) and ؟ (garbled sound).
- *  Both must be removed so whispered alignment matches what was actually spoken. */
+/** Prepare text specifically for Piper TTS — strips ? + break tags only.
+ *  Piper mispronounces ؟ (garbled click/syllable) and <break> tags,
+ *  but CORRECTLY pronounces tashkeel diacritics. Keep tashkeel for accurate speech. */
 function preparePiperText(text) {
   return stripArabicPunctuation(
-    stripTashkeel(text.replace(/<[^>]+>/g, ""))  // strip break tags + tashkeel + Arabic punct
-  );
+    text.replace(/<[^>]+>/g, " ")  // strip <break time=.../> tags, collapse spaces
+  ).replace(/[؟]/g, "");
 }
 
 // ── Add 200-500ms pauses between sentences for TTS engines ────────────────
@@ -334,7 +334,7 @@ async function generateFullNarration(scenes, jobId, options = {}) {
     globalTimings = result.wordTimings;
   } else if (ttsType === "kokoro" || ttsType === "piper") {
     try {
-      const cleanFull = sceneTexts.map((t) => stripArabicPunctuation(stripTashkeel(t))).join(" ");
+      const cleanFull = sceneTexts.map((t) => stripArabicPunctuation(stripTashkeel(t)).replace(/[؟]/g, "")).join(" ");
       globalTimings = await alignWordsWhisper(result.audioPath, cleanFull, { language: "ar" });
     } catch (e) {
       console.warn("⚠️ whisper alignment failed (" + e.message + ") — using length-proportional timings");
