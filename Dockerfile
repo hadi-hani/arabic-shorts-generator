@@ -24,7 +24,7 @@ RUN pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/w
     && pip3 install --no-cache-dir \
         "kokoro @ git+https://github.com/Oddadmix/kokoro.git@main" \
         soundfile huggingface_hub misaki \
-        edge-tts piper-tts
+        edge-tts piper-tts faster-whisper
 
 WORKDIR /app
 

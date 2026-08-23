@@ -4,6 +4,7 @@ const { spawn } = require("child_process");
 const { generateWithTimings } = require("./edge_tts");
 const { generateKokoro } = require("./kokoro_tts");
 const { generatePiper } = require("./piper_tts");
+const { alignWordsWhisper } = require("./align_whisper");
 const { stripTashkeel, tokenizeWords } = require("./word_aligner");
 
 // Available Arabic voices (Google TTS, legacy)
@@ -116,11 +117,11 @@ async function generateFull(text, outputPath, options = {}) {
   if (ttsType === "kokoro") {
     const wavPath = mp3Path.replace(/\.mp3$/, ".wav");
     const voice = (options.voice && !/^(male|female)$/i.test(options.voice))
-      ? options.voice : (process.env.KOKORO_VOICE || "ar");
+      ? options.voice : (process.env.KOKORO_VOICE || "af_msa");
     await generateKokoro(text, wavPath, {
       voice,
-      langCode: options.langCode || process.env.KOKORO_LANG_CODE || "a",
-      speed: options.speed || 1.0
+      langCode: options.langCode || process.env.KOKORO_LANG_CODE || "ar",
+      speed: options.speed || 0.9
     });
     await toMp3(wavPath, mp3Path);
     return { audioPath: mp3Path, wordTimings: null };
@@ -132,7 +133,7 @@ async function generateFull(text, outputPath, options = {}) {
       ? options.voice : (process.env.PIPER_VOICE || "ar_JO-kareem-medium");
     await generatePiper(text, wavPath, {
       voice,
-      speed: options.speed || 1.0
+      speed: options.speed || 1.1
     });
     await toMp3(wavPath, mp3Path);
     return { audioPath: mp3Path, wordTimings: null };
@@ -157,8 +158,9 @@ async function generateFullNarration(scenes, jobId, options = {}) {
 
   if (!sceneTexts.length) return { audioPaths: [], timingsList: [] };
 
-  // Join with a sentence separator so the engine inserts a natural pause.
-  const SEP = " . ";
+  // Join with an Arabic comma so the engine inserts a clean natural pause
+  // (avoids the glitchy blip the bare period " . " produced in Nabra).
+  const SEP = "، ";
   const fullText = sceneTexts.join(SEP);
 
   const fullPath = path.join(audioDir, "full_narration.mp3");
@@ -181,8 +183,8 @@ async function generateFullNarration(scenes, jobId, options = {}) {
   const fullDuration = await getAudioDuration(result.audioPath);
   const eps = 0.3;
 
-  // Proportional scene boundaries by character length (single TTS call ⇒
-  // roughly uniform speaking rate across the whole text).
+  // Proportional scene boundaries by character length (used for Edge time-range
+  // filtering and as the fallback when no real alignment is available).
   const lengths = sceneTexts.map((t) => Array.from(t).length);
   const totalLen = lengths.reduce((a, b) => a + b, 0) || 1;
   const ranges = [];
@@ -194,39 +196,110 @@ async function generateFullNarration(scenes, jobId, options = {}) {
     ranges.push({ start, end });
   }
 
+  const cleanSceneWords = sceneTexts.map((t) => tokenizeWords(stripTashkeel(t)));
+  const sceneWordCounts = cleanSceneWords.map((w) => w.length);
+  const totalClean = sceneWordCounts.reduce((a, b) => a + b, 0) || 1;
+
   const audioPaths = [];
   const timingsList = [];
 
-  for (let i = 0; i < sceneTexts.length; i++) {
-    const { start, end } = ranges[i];
-    const sceneId = scenes[i].id != null ? scenes[i].id : i + 1;
-    const segPath = path.join(audioDir, `scene_${sceneId}.mp3`);
-    await extractSegment(result.audioPath, segPath, start, end);
-
-    let sceneTimings = null;
-    if (result.wordTimings && result.wordTimings.length) {
-      sceneTimings = result.wordTimings
-        .filter((t) => (t.end != null ? t.end : t.start) >= start - eps &&
-                       (t.start != null ? t.start : 0) <= end + eps)
-        .map((t) => ({
-          word: t.word,
-          start: Math.max(0, (t.start != null ? t.start : 0) - start),
-          end: Math.max(0, (t.end != null ? t.end : 0) - start)
-        }));
+  // Real word timings:
+  //  - edge → native WordBoundary timings (already real).
+  //  - kokoro/piper → forced alignment via faster-whisper on the full audio
+  //    (exact, non-uniform word timestamps). We consume whisper words IN ORDER,
+  //    distributing them across scenes proportionally to each scene's word count,
+  //    which yields exact per-scene audio boundaries + real per-word timings.
+  let globalTimings = null;
+  if (ttsType === "edge" && result.wordTimings && result.wordTimings.length) {
+    globalTimings = result.wordTimings;
+  } else if (ttsType === "kokoro" || ttsType === "piper") {
+    try {
+      const cleanFull = sceneTexts.map((t) => stripTashkeel(t)).join(" ");
+      globalTimings = await alignWordsWhisper(result.audioPath, cleanFull, { language: "ar" });
+    } catch (e) {
+      console.warn(`⚠️ whisper alignment failed (${e.message}) — using length-proportional timings`);
+      globalTimings = null;
     }
+  }
 
-    // Fallback: approximate word timings evenly across the scene segment.
-    if (!sceneTimings || !sceneTimings.length) {
-      const words = tokenizeWords(stripTashkeel(sceneTexts[i]));
-      const dur = Math.max(0.1, end - start);
-      const step = dur / Math.max(1, words.length);
-      sceneTimings = words.map((w, idx) => ({
-        word: w, start: idx * step, end: (idx + 1) * step
+  if (globalTimings && globalTimings.length) {
+    const totalW = globalTimings.length;
+    let wi = 0;
+    for (let i = 0; i < sceneTexts.length; i++) {
+      const sceneId = scenes[i].id != null ? scenes[i].id : i + 1;
+      const segPath = path.join(audioDir, `scene_${sceneId}.mp3`);
+      const take = (i === sceneTexts.length - 1)
+        ? (totalW - wi)
+        : Math.max(1, Math.round((sceneWordCounts[i] / totalClean) * totalW));
+      const seg = globalTimings.slice(wi, wi + take);
+      wi += take;
+
+      if (!seg.length) {
+        // No whisper words for this scene → length-proportional fallback.
+        const { start, end } = ranges[i];
+        await extractSegment(result.audioPath, segPath, start, end);
+        const words = cleanSceneWords[i];
+        const wlen = words.map((w) => Array.from(w).length);
+        const wsum = wlen.reduce((a, b) => a + b, 0) || 1;
+        const dur = Math.max(0.1, end - start);
+        let t = 0;
+        const sceneTimings = words.map((w, idx) => {
+          const ws = (wlen[idx] / wsum) * dur;
+          const st = t, en = t + ws;
+          t = en;
+          return { word: w, start: st, end: en };
+        });
+        audioPaths.push(segPath);
+        timingsList.push(sceneTimings);
+        continue;
+      }
+
+      const aStart = seg[0].start;
+      const aEnd = seg[seg.length - 1].end;
+      await extractSegment(result.audioPath, segPath, aStart, aEnd);
+      const sceneTimings = seg.map((w) => ({
+        word: w.word,
+        start: Math.max(0, w.start - aStart),
+        end: Math.max(0, w.end - aStart)
       }));
+      audioPaths.push(segPath);
+      timingsList.push(sceneTimings);
     }
+  } else {
+    // Fallback: proportional boundaries + length-proportional word timings.
+    for (let i = 0; i < sceneTexts.length; i++) {
+      const { start, end } = ranges[i];
+      const sceneId = scenes[i].id != null ? scenes[i].id : i + 1;
+      const segPath = path.join(audioDir, `scene_${sceneId}.mp3`);
+      await extractSegment(result.audioPath, segPath, start, end);
 
-    audioPaths.push(segPath);
-    timingsList.push(sceneTimings);
+      let sceneTimings = null;
+      if (ttsType === "edge" && result.wordTimings && result.wordTimings.length) {
+        sceneTimings = result.wordTimings
+          .filter((t) => (t.end != null ? t.end : t.start) >= start - eps &&
+                         (t.start != null ? t.start : 0) <= end + eps)
+          .map((t) => ({
+            word: t.word,
+            start: Math.max(0, (t.start != null ? t.start : 0) - start),
+            end: Math.max(0, (t.end != null ? t.end : 0) - start)
+          }));
+      }
+      if (!sceneTimings || !sceneTimings.length) {
+        const words = cleanSceneWords[i];
+        const wlen = words.map((w) => Array.from(w).length);
+        const wsum = wlen.reduce((a, b) => a + b, 0) || 1;
+        const dur = Math.max(0.1, end - start);
+        let t = 0;
+        sceneTimings = words.map((w, idx) => {
+          const ws = (wlen[idx] / wsum) * dur;
+          const st = t, en = t + ws;
+          t = en;
+          return { word: w, start: st, end: en };
+        });
+      }
+      audioPaths.push(segPath);
+      timingsList.push(sceneTimings);
+    }
   }
 
   return { audioPaths, timingsList, engine: usedEngine };

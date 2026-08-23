@@ -117,16 +117,15 @@ ${platforms.map(p => {
   }`
     : "";
 
-  // Optional selective tashkeel (half-diacritization) so Edge TTS pronounces
-  // ambiguous Arabic words correctly. Only applies to narration; all other
-  // fields (title, caption, searchQuery, platform captions) stay clean.
+  // Full diacritization of the narration so Arabic TTS (Edge / Nabra / Piper)
+  // pronounces words correctly. Only applies to narration; all other fields
+  // (title, caption, searchQuery, platform captions) stay clean.
   const tashkeelBlock = options.enableTashkeel !== false
-    ? `IMPORTANT: In the "narration" of every scene, add SELECTIVE (half) tashkeel to help text-to-speech pronounce ambiguous words correctly.
+    ? `IMPORTANT: In the "narration" of every scene, add FULL tashkeel (complete diacritization) to EVERY word so text-to-speech pronounces Arabic correctly.
 Rules:
-- Only diacritize words that could be read in more than one way (e.g. "كتب", "علم", "المدرسة", "ذهب").
-- Use ONLY fatha (َ), damma (ُ), kasra (ِ). Do NOT use tanween or sukun.
-- Do NOT over-diaconize; leave obvious words plain so the speech stays natural.
-- Example: instead of "ذهب الرجل الى المدرسة وقرأ الكتاب" write "ذهبَ الرجلُ إلى المدرسةِ وقرأَ الكتابَ".
+- Diacritize ALL words fully using fatha (َ), damma (ُ), kasra (ِ), tanween (ً، ٌ، ٍ) and sukun (ْ) wherever grammatically correct.
+- Do NOT leave words undiacritized; full vocalization is required for correct pronunciation.
+- Example: instead of "ذهب الرجل الى المدرسة وقرأ الكتاب" write "ذَهَبَ الرَّجُلُ إِلَى المَدْرَسَةِ وَقَرَأَ الكِتَابَ".
 - Do NOT add any tashkeel to "title", "caption", "searchQuery", or platform captions.`
     : "";
 

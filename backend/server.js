@@ -98,7 +98,7 @@ function sanitizeFontOptions(options = {}) {
 
 // ─── Core Video Pipeline ───────────────────────────────────────────────────────
 async function runPipeline(topic, jobId, platforms, options = {}) {
-  const { ttsType = "edge", subtitleMode = "word", enableSubtitles = true, voice, enableTashkeel = true } = options;
+  const { ttsType = "edge", subtitleMode = "word", enableSubtitles = true, voice, enableTashkeel = true, speed } = options;
   const fontOptions = sanitizeFontOptions(options);
 
   setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms });
@@ -111,7 +111,8 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
   const { audioPaths, timingsList, engine } = await generateFullNarration(script.scenes, jobId, {
     ttsType,
     voice: ttsType === "edge" ? (voice || "default") : (voice || undefined),
-    speakingRate: 0.95
+    speakingRate: 0.95,
+    speed
   });
 
   const outputDir = path.join(__dirname, "output");
@@ -176,6 +177,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
  * Body:     { topic: string, platforms?: ["tt","yt","fb","ig"],
  *             ttsType?: "edge"|"google"|"kokoro"|"piper", subtitleMode?: "word"|"sentence"|"progressive",
  *             enableSubtitles?: boolean, enableTashkeel?: boolean, voice?: string,
+ *             speed?: number (TTS rate; defaults: Nabra/Kokoro 0.9, Piper 1.1, Edge 1.0),
  *             fontName?: "NotoSansArabic",
  *             fontSize?: number (20-160), fontColor?: "#RRGGBB"|name,
  *             borderColor?: "#RRGGBB"|name, borderWidth?: number (0-12),
@@ -193,7 +195,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 app.post("/api/generate", videoRouteHandler);
 app.post("/api/video", videoRouteHandler);   // alias — documented in README
 async function videoRouteHandler(req, res) {
-  const { topic, platforms, ttsType, subtitleMode, enableSubtitles, voice, enableTashkeel, fontName, fontSize, fontColor, borderColor, borderWidth, backgroundColor } = req.body;
+  const { topic, platforms, ttsType, subtitleMode, enableSubtitles, voice, enableTashkeel, fontName, fontSize, fontColor, borderColor, borderWidth, backgroundColor, speed } = req.body;
   if (!topic) return res.status(400).json({ error: "topic is required" });
 
   const validPlatforms = validatePlatforms(platforms);
@@ -206,7 +208,8 @@ async function videoRouteHandler(req, res) {
     enableSubtitles: enableSubtitles !== false,
     enableTashkeel: enableTashkeel !== false,
     voice: voice || undefined,
-    fontName, fontSize, fontColor, borderColor, borderWidth, backgroundColor
+    fontName, fontSize, fontColor, borderColor, borderWidth, backgroundColor,
+    speed: (speed != null && !isNaN(parseFloat(speed))) ? parseFloat(speed) : undefined
   };
 
   setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms: targetPlatforms });

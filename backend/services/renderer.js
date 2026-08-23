@@ -5,8 +5,18 @@ const axios = require("axios");
 const { segmentCaptions, buildAssFile, buildSrt, stripTashkeel } = require("./word_aligner");
 
 async function downloadFile(url, destPath) {
-  const response = await axios.get(url, { responseType: "arraybuffer", timeout: 15000 });
-  fs.writeFileSync(destPath, response.data);
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await axios.get(url, { responseType: "arraybuffer", timeout: 30000 });
+      fs.writeFileSync(destPath, response.data);
+      return;
+    } catch (e) {
+      lastErr = e;
+      console.warn(`⚠️ image download attempt ${attempt} failed: ${e.message}`);
+    }
+  }
+  throw lastErr;
 }
 
 function ffmpeg(args, logPath = null) {
