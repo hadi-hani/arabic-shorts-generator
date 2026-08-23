@@ -111,6 +111,25 @@ function splitArabicSentences(text) {
   return sentences.filter((s) => s.length > 0);
 }
 
+// ── Strip Arabic punctuation that Piper mispronounces (causes misalignment) ─
+// Keeps tashkeel intact — only removes ؟ ، ; and similar non-alphabetic chars.
+function stripArabicPunctuation(text) {
+  return String(text || "")
+    .replace(/[؟،؛]/g, "")   // Arabic question mark, comma, semicolon
+    .replace(/[!"'::…\-–—]+/g, " ")  // replace other punctuation with space
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Prepare text specifically for Piper TTS — strips tashkeel, ?, breaks tags.
+ *  Piper mispronounces tashkeel diacritics (adds syllables) and ؟ (garbled sound).
+ *  Both must be removed so whispered alignment matches what was actually spoken. */
+function preparePiperText(text) {
+  return stripArabicPunctuation(
+    stripTashkeel(text.replace(/<[^>]+>/g, ""))  // strip break tags + tashkeel + Arabic punct
+  );
+}
+
 // ── Add 200-500ms pauses between sentences for TTS engines ────────────────
 function addSentencePauses(text, ttsType) {
   const sentences = splitArabicSentences(text);
@@ -210,7 +229,9 @@ async function generateFull(text, outputPath, options = {}) {
       ? options.voice : (process.env.PIPER_VOICE || "ar_JO-kareem-medium");
     // Piper speaks slowly at default length_scale=1.0; drive it faster (default 1.8x)
     const piperSpeed = speed > 0 ? Math.max(1.6, speed) : 1.8;
-    await generatePiper(processedText, wavPath, {
+    // Strip tashkeel + break tags + ؟ — Piper mispronounces all three (garbles audio
+    // at sentence ends and merges words), which destroys whisper alignment.
+    await generatePiper(preparePiperText(processedText), wavPath, {
       voice,
       speed: piperSpeed
     });
@@ -313,7 +334,7 @@ async function generateFullNarration(scenes, jobId, options = {}) {
     globalTimings = result.wordTimings;
   } else if (ttsType === "kokoro" || ttsType === "piper") {
     try {
-      const cleanFull = sceneTexts.map((t) => stripTashkeel(t)).join(" ");
+      const cleanFull = sceneTexts.map((t) => stripArabicPunctuation(stripTashkeel(t))).join(" ");
       globalTimings = await alignWordsWhisper(result.audioPath, cleanFull, { language: "ar" });
     } catch (e) {
       console.warn("⚠️ whisper alignment failed (" + e.message + ") — using length-proportional timings");
