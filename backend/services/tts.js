@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const { generateWithTimings } = require("./edge_tts");
 const { generateKokoro } = require("./kokoro_tts");
 const { generatePiper } = require("./piper_tts");
@@ -262,6 +262,77 @@ function cleanAudio(inputPath, outputPath) {
   });
 }
 
+// ── Kokoro: generate per-scene audio with explicit silence gaps ──────────
+// Kokoro ignores all sentence-boundary markers (..., ., etc.) and produces one
+// continuous chunk — so we generate each scene separately and stitch with 400ms
+// silence to get natural-feeling pauses between scenes.
+const KOKORO_PAUSE_MS = 400;
+
+async function generateKokoroWithPauses(sceneTexts, audioDir, options) {
+  const { speed } = options;
+  const wavPaths = [];
+
+  for (let i = 0; i < sceneTexts.length; i++) {
+    const txt = stripArabicPunctuation(sceneTexts[i]);
+    const wavPath = path.join(audioDir, `kokoro_scene_${i}.wav`);
+    try {
+      await generateKokoro(txt, wavPath, { ...options, speed });
+      wavPaths.push(wavPath);
+    } catch (e) {
+      console.warn("⚠️ kokoro scene " + (i+1) + " failed: " + e.message);
+      wavPaths.push(null);
+    }
+  }
+
+  // Concatenate with silence gaps between valid segments
+  const validPaths = wavPaths.filter(Boolean);
+  if (validPaths.length === 0) return null;
+  if (validPaths.length === 1) return validPaths[0];
+
+  const outWav = path.join(audioDir, "full_narration.wav");
+  const concatList = path.join(audioDir, "concat.txt");
+  const lines = [];
+  for (let i = 0; i < validPaths.length; i++) {
+    lines.push("file '" + validPaths[i] + "'");
+    if (i < validPaths.length - 1) {
+      // Insert silence segment
+      const silPath = path.join(audioDir, `silence_${i}.wav`);
+      spawnSync("/tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg", [
+        "-y", "-f", "lavfi", "-i",
+        "anullsrc=r=24000:cl=stereo",
+        "-t", String(KOKORO_PAUSE_MS / 1000),
+        "-c:a", "pcm_s16le", silPath
+      ], {stdio:"ignore"});
+      lines.push("file '" + silPath + "'");
+    }
+  }
+  fs.writeFileSync(concatList, lines.join("\n"), "utf8");
+
+  await new Promise((resolve, reject) => {
+    const proc = spawn("/tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg", [
+      "-f", "concat", "-safe", "0", "-i", concatList,
+      "-c:a", "pcm_s16le", "-y", outWav
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    proc.stderr.on("data", d => (stderr += d.toString()));
+    proc.on("close", code => {
+      validPaths.forEach(p => { try { fs.unlinkSync(p); } catch (_) {} });
+      for (let i = 0; i < validPaths.length - 1; i++) {
+        try { fs.unlinkSync(path.join(audioDir, `silence_${i}.wav`)); } catch (_) {}
+      }
+      try { fs.unlinkSync(concatList); } catch (_) {}
+      if (code !== 0) return reject(new Error("kokoro concat failed: " + stderr.slice(-400)));
+      resolve();
+    });
+  });
+
+  // Convert to mp3 (what the rest of the pipeline expects)
+  const mp3Path = path.join(audioDir, "full_narration.mp3");
+  await toMp3(outWav, mp3Path);
+  try { fs.unlinkSync(outWav); } catch (_) {}
+  return mp3Path;
+}
+
 // ── Whole-script narration TTS → split into per-scene segments ────────────
 // Generates the ENTIRE narration in one TTS call (natural prosody, no silence
 // gaps between scenes), then cuts the single audio file into per-scene pieces.
@@ -286,17 +357,27 @@ async function generateFullNarration(scenes, jobId, options = {}) {
   const fullPath = path.join(audioDir, "full_narration.mp3");
   let result;
   let usedEngine = ttsType;
-  try {
-    result = await generateFull(fullText, fullPath, { ...options, ttsType });
-  } catch (e) {
-    // Graceful fallback so a video is still produced even if the chosen
-    // engine (kokoro/piper) fails to load its model.
-    if (ttsType !== "edge") {
-      console.warn("⚠️ " + ttsType + " TTS failed (" + e.message + ") — falling back to edge");
-      usedEngine = "edge";
-      result = await generateFull(fullText, fullPath, { ...options, ttsType: "edge" });
-    } else {
-      throw e;
+
+  if (ttsType === "kokoro") {
+    // Kokoro ignores all pause markers — generate per-scene with explicit silence gaps
+    const kokoroPath = await generateKokoroWithPauses(sceneTexts, audioDir, options);
+    if (!kokoroPath) {
+      throw new Error("kokoro produced no audio");
+    }
+    result = { audioPath: kokoroPath, wordTimings: null };
+  } else {
+    try {
+      result = await generateFull(fullText, fullPath, { ...options, ttsType });
+    } catch (e) {
+      // Graceful fallback so a video is still produced even if the chosen
+      // engine (kokoro/piper) fails to load its model.
+      if (ttsType !== "edge") {
+        console.warn("⚠️ " + ttsType + " TTS failed (" + e.message + ") — falling back to edge");
+        usedEngine = "edge";
+        result = await generateFull(fullText, fullPath, { ...options, ttsType: "edge" });
+      } else {
+        throw e;
+      }
     }
   }
 
