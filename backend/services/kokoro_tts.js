@@ -93,7 +93,8 @@ async function generateKokoro(text, outputPath, { voice = "af_msa", langCode = "
       NABRA_MODEL_DIR: modelDir,
       NABRA_REPO_ID: repoId
     };
-    const proc = spawn("python3", args, { env, stdio: ["ignore", "pipe", "pipe"] });
+    const pythonBin = process.env.KOKORO_PYTHON || "python3";
+    const proc = spawn(pythonBin, args, { env, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = ""; let stderr = "";
     proc.stdout.on("data", (d) => (stdout += d.toString()));
     proc.stderr.on("data", (d) => (stderr += d.toString()));

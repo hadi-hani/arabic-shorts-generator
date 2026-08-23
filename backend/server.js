@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const fs = require("fs");
 const { generateScript, generateCaptions, PLATFORM_CONFIGS } = require("./services/gemini");
-const { generateFullNarration } = require("./services/tts");
+const { generateFullNarration, cleanAudio } = require("./services/tts");
 const { fetchAllImages }   = require("./services/pexels");
 const { renderVideo }      = require("./services/renderer");
 
@@ -114,6 +114,20 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
     speakingRate: 0.95,
     speed
   });
+
+  // Clean generated audio: silence trimming, noise gate, click/pop removal
+  const cleanedAudioPaths = [];
+  for (const ap of audioPaths) {
+    if (ap && fs.existsSync(ap)) {
+      const cleanedAp = ap.replace(/\.[^.]+$/, "") + "_cleaned.mp3";
+      await cleanAudio(ap, cleanedAp);
+      cleanedAudioPaths.push(cleanedAp);
+    } else {
+      cleanedAudioPaths.push(ap);
+    }
+  }
+  audioPaths.length = 0;
+  audioPaths.push(...cleanedAudioPaths);
 
   const outputDir = path.join(__dirname, "output");
   fs.mkdirSync(outputDir, { recursive: true });

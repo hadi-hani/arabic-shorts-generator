@@ -39,8 +39,8 @@ const PLATFORM_CONFIGS = {
 // gemini-2.5-flash is paid but has free quota; gemini-2.0-flash-lite is free tier
 // Optionally override with GEMINI_MODEL env var (tried first)
 const MODEL_CHAIN = process.env.GEMINI_MODEL
-  ? [process.env.GEMINI_MODEL, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
-  : ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+  ? [process.env.GEMINI_MODEL, "gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+  : ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"];
 
 let currentModelIndex = 0;
 

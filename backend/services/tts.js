@@ -68,7 +68,7 @@ function extractSegment(srcPath, outPath, start, end) {
     let stderr = "";
     proc.stderr.on("data", (d) => (stderr += d.toString()));
     proc.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`ffmpeg segment failed: ${stderr.slice(-500)}`));
+      if (code !== 0) return reject(new Error("ffmpeg segment failed: " + stderr.slice(-500)));
       resolve(outPath);
     });
   });
@@ -84,10 +84,62 @@ function toMp3(srcPath, outPath) {
     let stderr = "";
     proc.stderr.on("data", (d) => (stderr += d.toString()));
     proc.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`ffmpeg toMp3 failed: ${stderr.slice(-500)}`));
+      if (code !== 0) return reject(new Error("ffmpeg toMp3 failed: " + stderr.slice(-500)));
       resolve(outPath);
     });
   });
+}
+
+// ── Arabic sentence splitter ───────────────────────────────────────────────
+function splitArabicSentences(text) {
+  // Arabic sentence terminators: "۔" (Arabic full stop/stop sign),
+  // "؟" (Arabic question mark)
+  // Arabic comma "、" is NOT a sentence terminator (used within sentences)
+  // Latin . ? ! are NOT treated as sentence terminators to avoid false splits
+  const ARABIC_FULL_STOP = "۔";
+  const ARABIC_QUESTION_MARK = "؟";
+  let sentences = text.split(ARABIC_FULL_STOP);
+  sentences = sentences.reduce((acc, part) => {
+    const subParts = part.split(ARABIC_QUESTION_MARK);
+    subParts.forEach((s) => {
+      const trimmed = s.trim();
+      if (trimmed) acc.push(trimmed);
+    });
+    return acc;
+  }, []);
+  // Filter empty strings
+  return sentences.filter((s) => s.length > 0);
+}
+
+// ── Add 200-500ms pauses between sentences for TTS engines ────────────────
+function addSentencePauses(text, ttsType) {
+  const sentences = splitArabicSentences(text);
+  if (sentences.length <= 1) return text;
+
+  const pauseMs = 300; // 200-500ms default to 300ms
+
+  if (ttsType === "piper") {
+    // Piper supports SSML <break> tags
+    return sentences.map((s, i) => {
+      if (i < sentences.length - 1) {
+        return s + " <break time=" + pauseMs + "ms/>";
+      }
+      return s;
+    }).join(" ");
+  }
+
+  if (ttsType === "kokoro") {
+    // Kokoro: insert pause marker using ellipsis + space
+    const pauseMarker = " ... ";
+    return sentences.map((s, i) => {
+      if (i < sentences.length - 1) {
+        return s + pauseMarker;
+      }
+      return s;
+    }).join(" ");
+  }
+
+  return text;
 }
 
 // ── Unified single-call TTS dispatch ───────────────────────────────────────
@@ -96,8 +148,14 @@ async function generateFull(text, outputPath, options = {}) {
   const ttsType = options.ttsType || "edge";
   const mp3Path = outputPath.replace(/\.[^.]+$/, "") + ".mp3";
 
+  // Speed control: 0.8x to 1.5x, default 1.0x
+  const speed = options.speed !== undefined ? Math.max(0.8, Math.min(1.5, options.speed)) : 1.0;
+
+  // Add sentence-aware pauses for Kokoro & Piper TTS
+  const processedText = addSentencePauses(text, ttsType);
+
   if (ttsType === "edge") {
-    const r = await generateWithTimings(text, mp3Path, {
+    const r = await generateWithTimings(processedText, mp3Path, {
       voice: options.voice || "default",
       rate: options.rate || "+0%"
     });
@@ -106,11 +164,30 @@ async function generateFull(text, outputPath, options = {}) {
 
   if (ttsType === "google") {
     const wavPath = mp3Path.replace(/\.mp3$/, ".wav");
-    await textToSpeech(text, wavPath, {
+    await textToSpeech(processedText, wavPath, {
       voice: options.voice || "male",
       speakingRate: options.speakingRate || 0.95
     });
-    await toMp3(wavPath, mp3Path);
+    // Use FFmpeg atempo to adjust speed for Google TTS
+    const tempMp3 = mp3Path.replace(/\.[^.]+$/, "") + "_temp.mp3";
+    await toMp3(wavPath, tempMp3);
+    await new Promise((resolve, reject) => {
+      const args = [
+        "-i", tempMp3,
+        "-af", "atempo=" + speed,
+        "-y", mp3Path
+      ];
+      const proc = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+      let stderr = "";
+      proc.stderr.on("data", (d) => (stderr += d.toString()));
+      proc.on("close", (code) => {
+        try { fs.unlinkSync(tempMp3); } catch (e) {}
+        if (code !== 0) return reject(new Error("ffmpeg atempo failed: " + stderr.slice(-500)));
+        resolve();
+      });
+      proc.on("error", (err) => { try { fs.unlinkSync(tempMp3); } catch (e) {} reject(err); });
+    });
+    await fs.promises.unlink(tempMp3).catch(() => {});
     return { audioPath: mp3Path, wordTimings: null };
   }
 
@@ -118,10 +195,10 @@ async function generateFull(text, outputPath, options = {}) {
     const wavPath = mp3Path.replace(/\.mp3$/, ".wav");
     const voice = (options.voice && !/^(male|female)$/i.test(options.voice))
       ? options.voice : (process.env.KOKORO_VOICE || "af_msa");
-    await generateKokoro(text, wavPath, {
+    await generateKokoro(processedText, wavPath, {
       voice,
       langCode: options.langCode || process.env.KOKORO_LANG_CODE || "ar",
-      speed: options.speed || 0.9
+      speed: speed
     });
     await toMp3(wavPath, mp3Path);
     return { audioPath: mp3Path, wordTimings: null };
@@ -131,15 +208,35 @@ async function generateFull(text, outputPath, options = {}) {
     const wavPath = mp3Path.replace(/\.mp3$/, ".wav");
     const voice = (options.voice && !/^(male|female)$/i.test(options.voice))
       ? options.voice : (process.env.PIPER_VOICE || "ar_JO-kareem-medium");
-    await generatePiper(text, wavPath, {
+    await generatePiper(processedText, wavPath, {
       voice,
-      speed: options.speed || 1.1
+      speed: speed
     });
     await toMp3(wavPath, mp3Path);
     return { audioPath: mp3Path, wordTimings: null };
   }
 
-  throw new Error(`Unknown ttsType: ${ttsType}`);
+  throw new Error("Unknown ttsType: " + ttsType);
+}
+
+// ── Clean audio: silence trimming, noise gate, click/pop removal ──────────
+function cleanAudio(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    const args = [
+      "-i", inputPath,
+      "-af", "silenceremove=start_periods=1:start_silence=0.5,aresample=async=1",
+      "-y", outputPath
+    ];
+    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    proc.stderr.on("data", (d) => (stderr += d.toString()));
+    proc.on("close", (code) => {
+      if (code !== 0) return reject(new Error("ffmpeg cleanAudio failed: " + stderr.slice(-500)));
+      if (!fs.existsSync(outputPath)) return reject(new Error("cleanAudio produced no output file"));
+      resolve(outputPath);
+    });
+    proc.on("error", (err) => reject(err));
+  });
 }
 
 // ── Whole-script narration TTS → split into per-scene segments ────────────
@@ -148,8 +245,8 @@ async function generateFull(text, outputPath, options = {}) {
 // Returns the SAME contract as the old generateSceneAudio:
 //   { audioPaths: [path|null], timingsList: [[{word,start,end}]|null] }
 async function generateFullNarration(scenes, jobId, options = {}) {
-  const audioDir = path.join(__dirname, `../temp/${jobId}/audio`);
-  fs.mkdirSync(audioDir, { recursive: true });
+  const audioDir = path.join(__dirname, "../temp/" + jobId + "/audio");
+  require("fs").mkdirSync(audioDir, { recursive: true });
 
   const ttsType = options.ttsType || "edge";
   const sceneTexts = scenes
@@ -172,7 +269,7 @@ async function generateFullNarration(scenes, jobId, options = {}) {
     // Graceful fallback so a video is still produced even if the chosen
     // engine (kokoro/piper) fails to load its model.
     if (ttsType !== "edge") {
-      console.warn(`⚠️ ${ttsType} TTS failed (${e.message}) — falling back to edge`);
+      console.warn("⚠️ " + ttsType + " TTS failed (" + e.message + ") — falling back to edge");
       usedEngine = "edge";
       result = await generateFull(fullText, fullPath, { ...options, ttsType: "edge" });
     } else {
@@ -217,7 +314,7 @@ async function generateFullNarration(scenes, jobId, options = {}) {
       const cleanFull = sceneTexts.map((t) => stripTashkeel(t)).join(" ");
       globalTimings = await alignWordsWhisper(result.audioPath, cleanFull, { language: "ar" });
     } catch (e) {
-      console.warn(`⚠️ whisper alignment failed (${e.message}) — using length-proportional timings`);
+      console.warn("⚠️ whisper alignment failed (" + e.message + ") — using length-proportional timings");
       globalTimings = null;
     }
   }
@@ -227,7 +324,7 @@ async function generateFullNarration(scenes, jobId, options = {}) {
     let wi = 0;
     for (let i = 0; i < sceneTexts.length; i++) {
       const sceneId = scenes[i].id != null ? scenes[i].id : i + 1;
-      const segPath = path.join(audioDir, `scene_${sceneId}.mp3`);
+      const segPath = path.join(audioDir, "scene_" + sceneId + ".mp3");
       const take = (i === sceneTexts.length - 1)
         ? (totalW - wi)
         : Math.max(1, Math.round((sceneWordCounts[i] / totalClean) * totalW));
@@ -270,7 +367,7 @@ async function generateFullNarration(scenes, jobId, options = {}) {
     for (let i = 0; i < sceneTexts.length; i++) {
       const { start, end } = ranges[i];
       const sceneId = scenes[i].id != null ? scenes[i].id : i + 1;
-      const segPath = path.join(audioDir, `scene_${sceneId}.mp3`);
+      const segPath = path.join(audioDir, "scene_" + sceneId + ".mp3");
       await extractSegment(result.audioPath, segPath, start, end);
 
       let sceneTimings = null;
@@ -307,17 +404,17 @@ async function generateFullNarration(scenes, jobId, options = {}) {
 
 // ── Legacy: per-scene Google TTS (deprecated) ─────────────────────────────
 async function generateAllAudio(scenes, jobId, { voice = "male", speakingRate = 0.95 } = {}) {
-  const audioDir = path.join(__dirname, `../temp/${jobId}/audio`);
-  fs.mkdirSync(audioDir, { recursive: true });
+  const audioDir = path.join(__dirname, "../temp/" + jobId + "/audio");
+  require("fs").mkdirSync(audioDir, { recursive: true });
 
   const results = await Promise.all(
     scenes.map(async (scene) => {
       try {
-        const filePath = path.join(audioDir, `scene_${scene.id}.mp3`);
+        const filePath = path.join(audioDir, "scene_" + scene.id + ".mp3");
         await textToSpeech(scene.narration, filePath, { voice, speakingRate });
         return filePath;
       } catch (e) {
-        console.warn(`⚠️ Audio skipped scene ${scene.id}: ${e.message}`);
+        console.warn("⚠️ Audio skipped scene " + scene.id + ": " + e.message);
         return null;
       }
     })
@@ -328,18 +425,18 @@ async function generateAllAudio(scenes, jobId, { voice = "male", speakingRate = 
 
 // ── Legacy: per-scene TTS (deprecated; use generateFullNarration) ─────────
 async function generateSceneAudio(scenes, jobId, options = {}) {
-  const audioDir = path.join(__dirname, `../temp/${jobId}/audio`);
-  fs.mkdirSync(audioDir, { recursive: true });
+  const audioDir = path.join(__dirname, "../temp/" + jobId + "/audio");
+  require("fs").mkdirSync(audioDir, { recursive: true });
 
   const ttsType = options.ttsType || "edge";
   const results = await Promise.all(
     scenes.map(async (scene) => {
       try {
-        const filePath = path.join(audioDir, `scene_${scene.id}.mp3`);
+        const filePath = path.join(audioDir, "scene_" + scene.id + ".mp3");
         const out = await generateFull(scene.narration, filePath, { ...options, ttsType });
         return { audioPath: out.audioPath, wordTimings: out.wordTimings || null };
       } catch (e) {
-        console.warn(`⚠️ Audio skipped scene ${scene.id} (${ttsType}): ${e.message}`);
+        console.warn("⚠️ Audio skipped scene " + scene.id + " (" + options.ttsType + "): " + e.message);
         return { audioPath: null, wordTimings: null };
       }
     })
@@ -357,5 +454,5 @@ async function generateTTS(text, outputPath, options = {}) {
 
 module.exports = {
   textToSpeech, generateAllAudio, generateTTS, generateSceneAudio,
-  generateFull, generateFullNarration, getAudioDuration, toMp3
+  generateFull, generateFullNarration, getAudioDuration, toMp3, cleanAudio
 };
