@@ -116,7 +116,7 @@ function addSentencePauses(text, ttsType) {
   const sentences = splitArabicSentences(text);
   if (sentences.length <= 1) return text;
 
-  const pauseMs = 300; // 200-500ms default to 300ms
+  const pauseMs = ttsType === "piper" ? 100 : 300; // Piper is naturally slow — shorter breaks
 
   if (ttsType === "piper") {
     // Piper supports SSML <break> tags
@@ -208,9 +208,11 @@ async function generateFull(text, outputPath, options = {}) {
     const wavPath = mp3Path.replace(/\.mp3$/, ".wav");
     const voice = (options.voice && !/^(male|female)$/i.test(options.voice))
       ? options.voice : (process.env.PIPER_VOICE || "ar_JO-kareem-medium");
+    // Piper speaks slowly at default length_scale=1.0; drive it faster (default 1.8x)
+    const piperSpeed = speed > 0 ? Math.max(1.6, speed) : 1.8;
     await generatePiper(processedText, wavPath, {
       voice,
-      speed: speed
+      speed: piperSpeed
     });
     await toMp3(wavPath, mp3Path);
     return { audioPath: mp3Path, wordTimings: null };
