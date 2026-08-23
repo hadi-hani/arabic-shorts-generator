@@ -1,3 +1,5 @@
+require("dotenv").config({ path: "/home/fedora_kde/vscodeFolder/testing wich is shorts container/.env" });
+
 const express = require("express");
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
