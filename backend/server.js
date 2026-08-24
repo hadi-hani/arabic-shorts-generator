@@ -107,7 +107,9 @@ function sanitizeFontOptions(options = {}) {
 
 // ─── Core Video Pipeline ───────────────────────────────────────────────────────
 async function runPipeline(topic, jobId, platforms, options = {}) {
-  const { ttsType = "edge", subtitleMode = "word", enableSubtitles = true, voice, enableTashkeel = true, speed } = options;
+  // Microsoft Edge TTS is the only engine — `ttsType` is accepted for
+  // backward compatibility but always normalized to "edge".
+  const { subtitleMode = "word", enableSubtitles = true, voice, enableTashkeel = true, speed } = options;
   const fontOptions = sanitizeFontOptions(options);
 
   setJob(jobId, { status: "processing", step: "🤖 Gemini يولّد السكريبت...", platforms });
@@ -116,11 +118,10 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
   setJob(jobId, { status: "processing", step: "🖼️ جلب الصور من Pexels...", platforms });
   const imageUrls = await fetchAllImages(script.scenes);
 
-  setJob(jobId, { status: "processing", step: `🔊 توليد الصوت (${ttsType})...`, platforms });
+  setJob(jobId, { status: "processing", step: "🔊 توليد الصوت (edge)...", platforms });
   const { audioPaths, timingsList, engine } = await generateFullNarration(script.scenes, jobId, {
-    ttsType,
-    voice: ttsType === "edge" ? (voice || "default") : (voice || undefined),
-    speakingRate: 0.95,
+    ttsType: "edge",
+    voice: voice || "default",
     speed
   });
 
@@ -165,7 +166,7 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
     videoUrl: `/output/${jobId}.mp4`,
     videoPath: finalPath,
     subtitlesUrl: srtPath ? `/output/${jobId}.srt` : null,
-    metadata: { ttsType: engine || ttsType, subtitleMode, enableSubtitles, enableTashkeel, wordCount, duration, ...fontOptions },
+    metadata: { ttsType: engine || "edge", subtitleMode, enableSubtitles, enableTashkeel, wordCount, duration, ...fontOptions },
     scenes: script.scenes.map((sc, i) => ({ ...sc, imageUrl: imageUrls[i], audioUrl: audioUrls[i] })),
     platforms: script.platforms || {}
   };
@@ -198,9 +199,10 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 /**
  * POST /api/generate  (also aliased as /api/video for backward compatibility)
  * Body:     { topic: string, platforms?: ["tt","yt","fb","ig"],
- *             ttsType?: "edge"|"google"|"kokoro"|"piper", subtitleMode?: "word"|"sentence"|"progressive",
+ *             ttsType?: "edge" (only engine — kept for backward compat),
+ *             subtitleMode?: "word"|"sentence"|"progressive",
  *             enableSubtitles?: boolean, enableTashkeel?: boolean, voice?: string,
- *             speed?: number (TTS rate; defaults: Nabra/Kokoro 0.9, Piper 1.1, Edge 1.0),
+ *             speed?: number 0.8-1.5 (TTS rate; default Edge 1.0),
  *             fontName?: "NotoSansArabic",
  *             fontSize?: number (20-160), fontColor?: "#RRGGBB"|name,
  *             borderColor?: "#RRGGBB"|name, borderWidth?: number (0-12),
@@ -210,7 +212,8 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
  *
  * Generates a full Arabic short video and returns download + caption links.
  * platforms defaults to ["tt","yt","fb","ig"] if omitted.
- * ttsType defaults to "edge"; subtitleMode defaults to "word"; enableSubtitles defaults to true.
+ * TTS is always Microsoft Edge (free, no API key).
+ * subtitleMode defaults to "word"; enableSubtitles defaults to true.
  * enableTashkeel defaults to true (selective diacritics for TTS pronunciation; on-screen subtitles stay clean).
  * fontName defaults to "NotoSansArabic"; borderWidth defaults to 5; fontColor "white"; borderColor "black".
  * Takes ~1-3 minutes depending on video length.
@@ -226,7 +229,7 @@ async function videoRouteHandler(req, res) {
   const jobId = uuidv4();
 
   const options = {
-    ttsType: ["edge", "google", "kokoro", "piper"].includes(ttsType) ? ttsType : "edge",
+    ttsType: "edge", // Microsoft Edge TTS — the only engine (free, no API key)
     subtitleMode: ["word", "sentence", "progressive"].includes(subtitleMode) ? subtitleMode : "word",
     enableSubtitles: enableSubtitles !== false,
     enableTashkeel: enableTashkeel !== false,
@@ -315,7 +318,7 @@ function cleanupExpired() {
 // Failed renders or killed subprocesses can leak helper scripts in os.tmpdir()
 // and whole temp/<jobId> trees. Sweep both on an hourly cadence by age.
 const TMP_SWEEP_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
-const TMP_SWEEP_PREFIXES = ["edge_tts_", "kokoro_nabra_", "whisper_align_", "whisper_out_"];
+const TMP_SWEEP_PREFIXES = ["edge_tts_", "whisper_align_", "whisper_out_"];
 
 function sweepTempResources() {
   const now = Date.now();

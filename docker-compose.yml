@@ -6,7 +6,6 @@ services:
       - "127.0.0.1:8282:80"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-placeholder}
-      - GOOGLE_TTS_KEY=${GOOGLE_TTS_KEY:-placeholder}
       - PEXELS_API_KEY=${PEXELS_API_KEY:-placeholder}
       - PORT=3001
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}

@@ -454,16 +454,13 @@
     <div>
       <div class="field-label">محرك الصوت (TTS)</div>
       <select id="tts-type">
-        <option value="edge">Edge TTS (افتراضي — بدون مفتاح)</option>
-        <option value="google">Google TTS (يتطلب مفتاحاً)</option>
-        <option value="kokoro">Nabra (Kokoro عربي — صوت af_msa)</option>
-        <option value="piper">Piper (عربي محلي — يتطلب تنزيل النموذج)</option>
+        <option value="edge">Edge TTS (مايكروسوفت — مجاني بدون مفتاح)</option>
       </select>
       <label class="sub-check"><input type="checkbox" id="enable-tashkeel" checked/> تشكيل النص لتحسين النطق</label>
       <div class="slider-row">
         <div class="field-label" style="margin-top:10px">سرعة الصوت (TTS Speed): <span id="speed-val">1.0×</span></div>
         <input type="range" id="tts-speed" min="0.6" max="1.4" step="0.05" value="1.0"/>
-        <div class="hint" style="font-size:.7rem;color:var(--muted)">الافتراضي لكل محرك: Nabra 0.9× (أبطأ)، Piper 1.1× (أسرع)، Edge 1.0×</div>
+        <div class="hint" style="font-size:.7rem;color:var(--muted)">السرعة الافتراضية: 1.0× (المدى الموصى به 0.8× – 1.5×)</div>
       </div>
     </div>
 
@@ -837,20 +834,13 @@ function errHTML(msg) {
   return '<div class="err-card">⚠️ حدث خطأ أثناء التوليد<div class="err-detail">' + escHtml(msg) + '</div></div>';
 }
 
-// ── TTS speed slider: reflect per-engine default + live label ──
+// ── TTS speed slider: live label (single engine: Edge TTS, default 1.0×) ──
 (function () {
   var speedEl = document.getElementById('tts-speed');
   var speedVal = document.getElementById('speed-val');
-  var ttsTypeEl = document.getElementById('tts-type');
-  function engineDefaultSpeed(t) { return t === 'kokoro' ? 0.9 : t === 'piper' ? 1.1 : 1.0; }
   function syncSpeedLabel() { speedVal.textContent = parseFloat(speedEl.value).toFixed(2) + '×'; }
-  if (ttsTypeEl && speedEl && speedVal) {
-    ttsTypeEl.addEventListener('change', function () {
-      speedEl.value = engineDefaultSpeed(ttsTypeEl.value);
-      syncSpeedLabel();
-    });
+  if (speedEl && speedVal) {
     speedEl.addEventListener('input', syncSpeedLabel);
-    speedEl.value = engineDefaultSpeed(ttsTypeEl.value);
     syncSpeedLabel();
   }
 })();

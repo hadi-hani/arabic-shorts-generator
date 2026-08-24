@@ -13,9 +13,6 @@ POST /api/generate  { "topic": "فوائد شرب الماء" }
         │
         ├── Gemini AI    →  السيناريو + الأوصاف + الهاشتاغات
         ├── Edge TTS     →  صوت عربي + توقيت كل كلمة (بدون مفتاح API)
-        ├── Nabra (Kokoro) TTS →  صوت عربي حقيقي (oddadmix/Nabra-82M-v0.1، صوت af_msa) — اختياري
-        ├── Piper TTS    →  صوت عربي محلي (ar_JO-kareem) — اختياري
-        ├── Google TTS   →  صوت عربي قديم (يتطلب مفتاحاً)
         ├── Pexels       →  صور خلفية للفيديو
         └── FFmpeg       →  فيديو 1080×1920 مع حركة Ken Burns + ترجمة ASS
 ```
@@ -28,9 +25,8 @@ POST /api/generate  { "topic": "فوائد شرب الماء" }
 |--------|-----------|------------|
 | [Google Gemini](https://aistudio.google.com/) | توليد السيناريو والأوصاف | ✅ مطلوب (باقة مجانية متوفرة) |
 | [Pexels](https://www.pexels.com/api/) | صور الخلفية | ✅ مطلوب (مجاني) |
-| [Google Cloud TTS](https://cloud.google.com/text-to-speech) | صوت بديل (وضع قديم) | ❌ اختياري — لا يُستخدم افتراضياً |
 
-> **ملاحظة مهمة**: الوضع الافتراضي للصوت هو **Edge TTS** من مايكروسوفت — **لا يحتاج أي مفتاح API**. يكفيك مفتاحان فقط (Gemini + Pexels) لتشغيل المشروع بالكامل.
+> **ملاحظة مهمة**: الصوت يعتمد حصرياً على **Edge TTS** من مايكروسوفت — **لا يحتاج أي مفتاح API** ويدعم العربية بشكل ممتاز. يكفيك مفتاحان فقط (Gemini + Pexels) لتشغيل المشروع بالكامل.
 
 ---
 
@@ -122,11 +118,11 @@ curl -X POST http://localhost:8282/api/generate \
   -d '{
     "topic": "فوائد شرب الماء",            // مطلوب — موضوع الفيديو بالعربية
     "platforms": ["tt", "yt"],            // المنصات المطلوبة أوصافها: tt/yt/fb/ig — الحذف = الأربع كلها
-    "ttsType": "edge",                    // محرك الصوت: edge (بدون مفتاح) | google (مفتاح) | kokoro (Nabra عربي حقيقي) | piper (عربي محلي)
+    "ttsType": "edge",                    // محرك الصوت: edge فقط (مايكروسوفت — مجاني بدون مفتاح). القيمة تُطبَّع دائماً إلى edge
     "subtitleMode": "progressive",        // نمط الترجمة: word | sentence | progressive (الافتراضي: word)
     "enableSubtitles": true,              // تفعيل الترجمة على الفيديو
     "enableTashkeel": true,               // تشكيل السرد لتحسين النطق — للصوت فقط والترجمة تبقى نظيفة
-    "voice": "ar-SA-Zariyah",             // الصوت: مع edge اسم مختصر مثل ar-SA-Zariyah — مع google: male/female
+    "voice": "ar-SA-Zariyah",             // صوت Edge: اسم مختصر مثل ar-SA-Zariyah أو male/female/default
     "fontName": "NotoSansArabic",         // الخط الوحيد المتاح — مقبول للتوافق لكنه بلا تأثير
     "fontSize": 60,                       // حجم الخط 20-160 — الحذف = تلقائي
     "fontColor": "#FFD700",               // لون النص — "#RRGGBB" أو اسم
@@ -225,7 +221,6 @@ curl http://localhost:8282/api/health
 ```env
 GEMINI_API_KEY=your_gemini_key
 PEXELS_API_KEY=your_pexels_key
-# GOOGLE_TTS_KEY=your_google_tts_key   # فقط إذا استخدمت ttsType: "google"
 # GEMINI_MODEL=gemini-2.5-flash        # اختياري — يفرض نموذجاّ محدداً بدل السلسلة الافتراضية
 
 # رابط الـ API العام (مهم جداً للنشر على خادم حقيقي):
@@ -239,7 +234,6 @@ PEXELS_API_KEY=your_pexels_key
 |---------|--------|-------|
 | `GEMINI_API_KEY` | ✅ | مفتاح Google Gemini (السيناريو والأوصاف) |
 | `PEXELS_API_KEY` | ✅ | مفتاح Pexels (صور الخلفية) |
-| `GOOGLE_TTS_KEY` | ❌ | مطلوب فقط عند استخدام `ttsType: "google"` |
 | `GEMINI_MODEL` | ❌ | نموذج محدد؛ يُجرَّب أولاً قبل سلسلة النماذج الافتراضية |
 | `PUBLIC_BASE_URL` | ❌ | **مهم!** الرابط العام للمشروع (مثل `https://shorts.example.com`). بدونه تُستخدم `req.protocol + req.host` التي قد تكون خاطئة خلف reverse proxy |
 | `VIDEO_TTL_HOURS` | ❌ | عدد الساعات قبل حذف الفيديو تلقائياً (الافتراضي: 24). الصفر = غير مُحدّد |
@@ -271,8 +265,7 @@ arabic-shorts-generator/
 │   │   ├── gemini.js         # السيناريو والأوصاف عبر Gemini
 │   │   ├── tts.js            # مدخل الصوت الموحد (نداء واحد للنص كامل + تقسيم لكل مشهد)
 │   │   ├── edge_tts.js       # Edge TTS + توقيت كل كلمة
-│   │   ├── kokoro_tts.js     # Nabra (Kokoro) TTS — oddadmix/Nabra-82M-v0.1 عربي حقيقي
-│   │   ├── piper_tts.js      # Piper TTS (عربي محلي + تنزيل النموذج تلقائياً)
+│   │   ├── align_whisper.js  # محاذاة إجبارية احتياطية (فقط عند غياب توقيتات Edge)
 │   │   ├── word_aligner.js   # محاذاة الكلمات + بناء ASS/SRT (3 أنماط)
 │   │   ├── pexels.js         # البحث عن صور الخلفية
 │   │   └── renderer.js       # بناء الفيديو (Ken Burns + ترجمة + الخطوط)
@@ -319,7 +312,6 @@ docker run -d \
   -p 8282:80 \
   -e GEMINI_API_KEY=your_key \
   -e PEXELS_API_KEY=your_key \
-  -e GOOGLE_TTS_KEY=your_key \
   -e PUBLIC_BASE_URL=https://shorts.example.com \
   -e VIDEO_TTL_HOURS=24 \
   -v $(pwd)/backend/output:/app/output \
@@ -338,9 +330,9 @@ docker run -d \
 - الترجمة العربية تُرسم عبر ASS/libass بالخط المضمّن — لا حاجة لتثبيت خطوط على النظام.
 - حالة المهام **تُحفظ على القرص** (`backend/data/jobs.json`) — إعادة تشغيل الخادم لا تُفقد المهام الجارية.
 - عند استخدام `PUBLIC_BASE_URL` تأكد من أنه يحتوي على بروتوكول كامل (مثل `https://shorts.example.com`) وليس فيه `/` في النهاية.
-- **الصوت متصل**: السرد يُولَّد بنداء TTS **واحد للنص الكامل** ثم يُقسَّم لكل مشهد — فيسرٍ طبيعي بلا فجوات صمت بين المشاهد. مزامنة الكلمات: `edge` يستخدم توقيتات WordBoundary الحقيقية، و`kokoro`/`piper` تُستخرج توقيتاتهما الحرفية عبر **faster-whisper** (محاذاة إجبارية للصوت بالعربية) → مزامنة دقيقة تماماً كـ Edge. عند فشل Whisper يُتراجَع تلقائياً إلى توزيع الكلمات حسب الطول.
-- **محركات صوت إضافية**: `kokoro` (= **Nabra-82M-v0.1**، نموذج عربي حقيقي يُحمَّل تلقائياً من HuggingFace، صوت `af_msa` أنثوي 24kHz) و `piper` (عربي حقيقي `ar_JO-kareem-medium` يُنزَّل تلقائياً). عند فشل أي محرك يتراجع النظام تلقائياً إلى Edge لضمان توليد الفيديو.
-- **سرعة الصوت**: منزلق في الواجهة (الافتراضي لكل محرك: Nabra/Kokoro = 0.9 أبطأ، Piper = 1.1 أسرع، Edge = 1.0). التشكيل في السرد تحويلي كامل لتحسين النطق (يبقى على الشاشة نظيفاً).
+- **الصوت متصل**: السرد يُولَّد بنداء TTS **واحد للنص الكامل** ثم يُقسَّم لكل مشهد — فيسرٍ طبيعي بلا فجوات صمت بين المشاهد. مزامنة الكلمات تعتمد توقيتات **WordBoundary** الأصلية من Edge؛ وإن غابت لأي سبب يُجرَّب fallback عبر **faster-whisper** (محاذاة إجبارية بالعربية)، وعند فشله يُوزَّع التوقيت حسب طول الكلمات.
+- **محرك الصوت الوحيد هو Edge TTS** (مايكروسوفت): مجاني تماماً بدون مفتاح API، أصوات عربية جاهزة مثل `ar-SA-ZariyahNeural` (أنثوي) و`ar-SA-HamedNeural` (رجالي).
+- **سرعة الصوت**: منزلق في الواجهة (0.6× – 1.4×، الافتراضي 1.0×). التشكيل في السرد تحويلي كامل لتحسين النطق (يبقى على الشاشة نظيفاً).
 
 ---
 
