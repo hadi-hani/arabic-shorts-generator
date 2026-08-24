@@ -6,4 +6,4 @@ backend/data/
 backend/models/
 backend/*.log
 backend/.env
-backend/bin/
+backend/bin/ffmpeg
