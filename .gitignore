@@ -7,3 +7,4 @@ backend/models/
 backend/*.log
 backend/.env
 backend/bin/ffmpeg
+__pycache__/
