@@ -207,6 +207,25 @@ async function renderVideo({ script, imageUrls, audioPaths, wordTimingsList, sub
   fs.mkdirSync(workDir,   { recursive: true });
   fs.mkdirSync(outputDir, { recursive: true });
 
+  // The temp dir must be removed on EVERY exit path — success or failure —
+  // otherwise failed renders leak hundreds of MB per job.
+  try {
+    return await renderVideoInner({
+      script, imageUrls, audioPaths, wordTimingsList,
+      subtitleMode, enableSubtitles, jobId, fontName, fontOptions,
+      workDir, outputDir
+    });
+  } finally {
+    try {
+      fs.rmSync(workDir, { recursive: true, force: true });
+      console.log(`🧹 Cleaned temp dir: ${workDir}`);
+    } catch (e) {
+      console.warn(`⚠️ Cleanup failed: ${e.message}`);
+    }
+  }
+}
+
+async function renderVideoInner({ script, imageUrls, audioPaths, wordTimingsList, subtitleMode, enableSubtitles, jobId, fontName, fontOptions = {}, workDir, outputDir }) {
   const scenes   = script.scenes;
   const { family: fontFamily } = resolveFont(fontName);
   const FPS = 25;
@@ -270,13 +289,6 @@ async function renderVideo({ script, imageUrls, audioPaths, wordTimingsList, sub
 
   const elapsed = ((Date.now()-startTime)/1000).toFixed(1);
   console.log(`🎬 Final video (${elapsed}s total): ${finalOutput}`);
-
-  try {
-    fs.rmSync(workDir, { recursive: true, force: true });
-    console.log(`🧹 Cleaned temp dir: ${workDir}`);
-  } catch (e) {
-    console.warn(`⚠️ Cleanup failed: ${e.message}`);
-  }
 
   return { finalPath: finalOutput, srtPath: enableSubtitles !== false ? srtOutput : null };
 }

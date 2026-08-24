@@ -74,13 +74,24 @@ async function generateWithTimings(text, outputPath, { voice = "default", rate =
     const proc = spawn("python3", args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    // Hard cap: a hung Microsoft session must not block the pipeline forever.
+    const timer = setTimeout(() => {
+      try { proc.kill("SIGKILL"); } catch (_) {}
+      reject(new Error("[edge-tts] timed out after 60s"));
+    }, 60000);
+    const done = (fn) => (...a) => { clearTimeout(timer); fn(...a); };
+    const cleanupScript = () => { try { fs.unlinkSync(scriptPath); } catch (_) {} };
+
     proc.stdout.on("data", (d) => { stdout += d.toString(); });
     proc.stderr.on("data", (d) => { stderr += d.toString(); });
-    proc.on("error", (err) => reject(err));
-    proc.on("close", (code) => {
-      fs.unlinkSync(scriptPath);
+    proc.on("error", done((err) => {
+      cleanupScript();
+      reject(new Error(`[edge-tts] spawn failed: ${err.message}`));
+    }));
+    proc.on("close", done((code) => {
+      cleanupScript();
       if (code !== 0) {
-        return reject(new Error(`edge-tts (python) failed: ${(stderr || stdout).trim()}`));
+        return reject(new Error(`edge-tts (python) failed: ${(stderr || stdout).trim().slice(-400)}`));
       }
       let wordTimings = [];
       try {
@@ -93,7 +104,7 @@ async function generateWithTimings(text, outputPath, { voice = "default", rate =
         return reject(new Error("edge-tts (python) produced no audio file"));
       }
       resolve({ audioPath: outputPath, wordTimings, source: "edge" });
-    });
+    }));
   });
 }
 

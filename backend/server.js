@@ -3,6 +3,7 @@ require("dotenv").config({ path: "/home/fedora_kde/vscodeFolder/testing wich is 
 // Prefer the bundled static ffmpeg (libass/subtitles support) over the system one.
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const bundledBin = path.join(__dirname, "bin");
 if (fs.existsSync(path.join(bundledBin, "ffmpeg"))) {
   process.env.PATH = bundledBin + ":" + process.env.PATH;
@@ -309,8 +310,45 @@ function cleanupExpired() {
   } catch (e) {}
   if (removed > 0) console.log(`🧹 Auto-cleaned ${removed} expired output file(s)`);
 }
+
+// ─── Resource sweep: /tmp scripts + stale temp/<jobId> dirs ────────────────
+// Failed renders or killed subprocesses can leak helper scripts in os.tmpdir()
+// and whole temp/<jobId> trees. Sweep both on an hourly cadence by age.
+const TMP_SWEEP_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+const TMP_SWEEP_PREFIXES = ["edge_tts_", "kokoro_nabra_", "whisper_align_", "whisper_out_"];
+
+function sweepTempResources() {
+  const now = Date.now();
+  let swept = 0;
+  try {
+    for (const f of fs.readdirSync(os.tmpdir())) {
+      if (!TMP_SWEEP_PREFIXES.some((p) => f.startsWith(p))) continue;
+      const fp = path.join(os.tmpdir(), f);
+      try {
+        if (fs.statSync(fp).mtimeMs < now - TMP_SWEEP_MAX_AGE_MS) { fs.unlinkSync(fp); swept++; }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  // Stale render/audio work dirs (covers crashed renders too, not only jobs.json)
+  const tempRoot = path.join(__dirname, "temp");
+  try {
+    for (const d of fs.readdirSync(tempRoot)) {
+      const dp = path.join(tempRoot, d);
+      try {
+        if (fs.statSync(dp).isDirectory() && fs.statSync(dp).mtimeMs < now - VIDEO_TTL_MS) {
+          fs.rmSync(dp, { recursive: true, force: true });
+          swept++;
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  if (swept > 0) console.log(`🧹 Swept ${swept} stale tmp resource(s)`);
+}
+
 cleanupExpired();
+sweepTempResources();
 setInterval(cleanupExpired, 60 * 60 * 1000);
+setInterval(sweepTempResources, 30 * 60 * 1000);
 
 const PORT = process.env.PORT || 3001;
 if (require.main === module) {

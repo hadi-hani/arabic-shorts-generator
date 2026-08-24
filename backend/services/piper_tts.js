@@ -30,20 +30,31 @@ function modelPaths(voice) {
 
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
+    let file = null;
+    const fail = (err) => {
+      // Never leave a partial file or an open fd behind.
+      if (file) { try { file.destroy(); } catch (_) {} }
+      try { fs.unlinkSync(dest); } catch (_) {}
+      reject(err);
+    };
     const doGet = (u) => {
       https.get(u, { headers: { "User-Agent": "arabic-shorts-generator" } }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
+          res.resume(); // drain redirect body so the socket is freed
           const loc = res.headers.location;
           const nextUrl = loc.startsWith("http") ? loc : new URL(loc, u).href;
           return doGet(nextUrl);
         }
         if (res.statusCode !== 200) {
-          return reject(new Error(`Download failed (${res.statusCode}): ${u}`));
+          res.resume();
+          return fail(new Error(`Download failed (${res.statusCode}): ${u}`));
         }
-        const file = fs.createWriteStream(dest);
+        file = fs.createWriteStream(dest);
+        file.on("error", (e) => fail(new Error(`Download write failed: ${e.message}`)));
+        res.on("error", (e) => fail(new Error(`Download network error: ${e.message}`)));
         res.pipe(file);
         file.on("finish", () => file.close(() => resolve(dest)));
-      }).on("error", reject);
+      }).on("error", (e) => fail(new Error(`Download request error: ${e.message}`)));
     };
     doGet(url);
   });

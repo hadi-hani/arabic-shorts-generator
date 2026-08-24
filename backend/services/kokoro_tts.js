@@ -96,15 +96,26 @@ async function generateKokoro(text, outputPath, { voice = "af_msa", langCode = "
     const pythonBin = process.env.KOKORO_PYTHON || "python3";
     const proc = spawn(pythonBin, args, { env, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = ""; let stderr = "";
+    // Model load + synthesis per scene; hung torch import must not block forever.
+    const timer = setTimeout(() => {
+      try { proc.kill("SIGKILL"); } catch (_) {}
+      reject(new Error("[kokoro] timed out after 180s"));
+    }, 180000);
+    const done = (fn) => (...a) => { clearTimeout(timer); fn(...a); };
+    const cleanupScript = () => { try { fs.unlinkSync(scriptPath); } catch (_) {} };
+
     proc.stdout.on("data", (d) => (stdout += d.toString()));
     proc.stderr.on("data", (d) => (stderr += d.toString()));
-    proc.on("error", (err) => reject(err));
-    proc.on("close", (code) => {
-      fs.unlinkSync(scriptPath);
-      if (code !== 0) return reject(new Error(`kokoro/nabra (python) failed (${code}): ${(stderr || stdout).trim()}`));
+    proc.on("error", done((err) => {
+      cleanupScript();
+      reject(new Error(`[kokoro] spawn failed (${pythonBin}): ${err.message}`));
+    }));
+    proc.on("close", done((code) => {
+      cleanupScript();
+      if (code !== 0) return reject(new Error(`kokoro/nabra (python) failed (${code}): ${(stderr || stdout).trim().slice(-400)}`));
       if (!fs.existsSync(outputPath)) return reject(new Error("kokoro/nabra produced no audio file"));
       resolve({ audioPath: outputPath });
-    });
+    }));
   });
 }
 

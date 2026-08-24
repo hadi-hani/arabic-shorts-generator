@@ -9,6 +9,18 @@ const FFMPEG_BIN = (() => {
   return "ffmpeg";
 })();
 
+// ── Temp-file hygiene helpers ──────────────────────────────────────────────
+// Every intermediate artifact this module creates should eventually hit one
+// of these. safeUnlink never throws — cleanup must not mask the real error.
+function safeUnlink(p) {
+  if (!p) return;
+  try { fs.unlinkSync(p); } catch (_) {}
+}
+
+function cleanupFiles(paths) {
+  (paths || []).forEach(safeUnlink);
+}
+
 // ── Unified child_process runner ───────────────────────────────────────────
 // Guarantees for every ffmpeg/ffprobe call in this module:
 //   • stderr/stdout captured for diagnostics
@@ -248,7 +260,7 @@ async function generateFull(text, outputPath, options = {}) {
           "-y", mp3Path
         ], { label: `ffmpeg:atempo(${speed})` });
       } finally {
-        try { fs.unlinkSync(tempMp3); } catch (_) {}
+        cleanupFiles([tempMp3, wavPath]); // both are intermediates
       }
       audioPath = mp3Path;
     } else if (ttsType === "kokoro") {
@@ -261,8 +273,8 @@ async function generateFull(text, outputPath, options = {}) {
         speed: speed
       });
       await toMp3(wavPath, mp3Path);
+      safeUnlink(wavPath); // wav is intermediate — mp3 is the deliverable
       audioPath = mp3Path;
-      wordTimings = null;
     } else if (ttsType === "piper") {
       const wavPath = mp3Path.replace(/\.mp3$/, ".wav");
       const voice = (options.voice && !/^(male|female)$/i.test(options.voice))
@@ -276,6 +288,7 @@ async function generateFull(text, outputPath, options = {}) {
         speed: piperSpeed
       });
       await toMp3(wavPath, mp3Path);
+      safeUnlink(wavPath); // wav is intermediate — mp3 is the deliverable
       audioPath = mp3Path;
     } else {
       throw new Error(`unknown ttsType "${ttsType}" — valid: edge | google | kokoro | piper`);
@@ -372,12 +385,15 @@ async function generateKokoroWithPauses(sceneTexts, audioDir, options) {
     ], { stdio: ["ignore", "pipe", "pipe"] });
     let stderr = "";
     proc.stderr.on("data", d => (stderr += d.toString()));
+    proc.on("error", (err) => reject(new Error(`[TTS:kokoroPauses] concat spawn failed: ${err.message}`)));
     proc.on("close", code => {
-      validPaths.forEach(p => { try { fs.unlinkSync(p); } catch (_) {} });
-      for (let i = 0; i < validPaths.length - 1; i++) {
-        try { fs.unlinkSync(path.join(audioDir, `silence_${i}.wav`)); } catch (_) {}
-      }
-      try { fs.unlinkSync(concatList); } catch (_) {}
+      // Intermediates are removed regardless of exit code — never leak wavs.
+      cleanupFiles(validPaths);
+      cleanupFiles(
+        Array.from({ length: Math.max(0, validPaths.length - 1) },
+          (_, i) => path.join(audioDir, `silence_${i}.wav`))
+      );
+      safeUnlink(concatList);
       if (code !== 0) return reject(new Error("kokoro concat failed: " + stderr.slice(-400)));
       resolve();
     });
@@ -386,7 +402,7 @@ async function generateKokoroWithPauses(sceneTexts, audioDir, options) {
   // Convert to mp3 (what the rest of the pipeline expects)
   const mp3Path = path.join(audioDir, "full_narration.mp3");
   await toMp3(outWav, mp3Path);
-  try { fs.unlinkSync(outWav); } catch (_) {}
+  safeUnlink(outWav);
   return mp3Path;
 }
 

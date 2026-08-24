@@ -46,23 +46,38 @@ async function alignWordsWhisper(audioPath, text, { language = "ar", model = pro
     const args = [scriptPath, audioPath, outPath, language, model];
     const proc = spawn("python3", args, { stdio: ["ignore", "pipe", "pipe"] });
     let stderr = "";
+    // Whisper on long narrations can take a while; 5 minutes is generous.
+    const timer = setTimeout(() => {
+      try { proc.kill("SIGKILL"); } catch (_) {}
+      fail(new Error("[whisper] timed out after 300s"));
+    }, 300000);
+    const done = (fn) => (...a) => { clearTimeout(timer); fn(...a); };
+    // Every exit path must leave zero temp files behind.
+    function fail(err) {
+      try { fs.unlinkSync(scriptPath); } catch (_) {}
+      try { fs.unlinkSync(outPath); } catch (_) {}
+      reject(err);
+    }
+
     proc.stderr.on("data", (d) => (stderr += d.toString()));
-    proc.on("error", (err) => reject(err));
-    proc.on("close", (code) => {
-      try { fs.unlinkSync(scriptPath); } catch (e) {}
+    proc.on("error", done((err) => fail(new Error(`[whisper] spawn failed: ${err.message}`))));
+    proc.on("close", done((code) => {
+      try { fs.unlinkSync(scriptPath); } catch (_) {}
       if (code !== 0) {
-        try { fs.unlinkSync(outPath); } catch (e) {}
+        try { fs.unlinkSync(outPath); } catch (_) {}
         return reject(new Error(`whisper failed (${code}): ${stderr.trim().slice(-800)}`));
       }
+      let data;
       try {
-        const data = JSON.parse(fs.readFileSync(outPath, "utf8"));
-        try { fs.unlinkSync(outPath); } catch (e) {}
-        if (!Array.isArray(data) || !data.length) return reject(new Error("whisper returned no words"));
-        resolve(data);
+        data = JSON.parse(fs.readFileSync(outPath, "utf8"));
       } catch (e) {
-        reject(new Error(`whisper output parse failed: ${e.message}`));
+        try { fs.unlinkSync(outPath); } catch (_) {}
+        return reject(new Error(`whisper output parse failed: ${e.message}`));
       }
-    });
+      try { fs.unlinkSync(outPath); } catch (_) {}
+      if (!Array.isArray(data) || !data.length) return reject(new Error("whisper returned no words"));
+      resolve(data);
+    }));
   });
 }
 
