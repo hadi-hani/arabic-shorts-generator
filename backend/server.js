@@ -1,10 +1,16 @@
 require("dotenv").config({ path: "/home/fedora_kde/vscodeFolder/testing wich is shorts container/.env" });
 
+// Prefer the bundled static ffmpeg (libass/subtitles support) over the system one.
+const path = require("path");
+const fs = require("fs");
+const bundledBin = path.join(__dirname, "bin");
+if (fs.existsSync(path.join(bundledBin, "ffmpeg"))) {
+  process.env.PATH = bundledBin + ":" + process.env.PATH;
+}
+
 const express = require("express");
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
-const path = require("path");
-const fs = require("fs");
 const { generateScript, generateCaptions, PLATFORM_CONFIGS } = require("./services/gemini");
 const { generateFullNarration, cleanAudio } = require("./services/tts");
 const { fetchAllImages }   = require("./services/pexels");

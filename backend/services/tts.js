@@ -1,6 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
+
+// ffmpeg binary resolution: bundled static build (has libass/subtitles) → PATH
+const FFMPEG_BIN = (() => {
+  const localBin = path.join(__dirname, "../bin/ffmpeg");
+  if (fs.existsSync(localBin)) return localBin;
+  return "ffmpeg";
+})();
 const { generateWithTimings } = require("./edge_tts");
 const { generateKokoro } = require("./kokoro_tts");
 const { generatePiper } = require("./piper_tts");
@@ -297,7 +304,7 @@ async function generateKokoroWithPauses(sceneTexts, audioDir, options) {
     if (i < validPaths.length - 1) {
       // Insert silence segment
       const silPath = path.join(audioDir, `silence_${i}.wav`);
-      spawnSync("/tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg", [
+      spawnSync(FFMPEG_BIN, [
         "-y", "-f", "lavfi", "-i",
         "anullsrc=r=24000:cl=stereo",
         "-t", String(KOKORO_PAUSE_MS / 1000),
@@ -309,7 +316,7 @@ async function generateKokoroWithPauses(sceneTexts, audioDir, options) {
   fs.writeFileSync(concatList, lines.join("\n"), "utf8");
 
   await new Promise((resolve, reject) => {
-    const proc = spawn("/tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg", [
+    const proc = spawn(FFMPEG_BIN, [
       "-f", "concat", "-safe", "0", "-i", concatList,
       "-c:a", "pcm_s16le", "-y", outWav
     ], { stdio: ["ignore", "pipe", "pipe"] });
@@ -360,11 +367,15 @@ async function generateFullNarration(scenes, jobId, options = {}) {
 
   if (ttsType === "kokoro") {
     // Kokoro ignores all pause markers — generate per-scene with explicit silence gaps
-    const kokoroPath = await generateKokoroWithPauses(sceneTexts, audioDir, options);
-    if (!kokoroPath) {
-      throw new Error("kokoro produced no audio");
+    try {
+      const kokoroPath = await generateKokoroWithPauses(sceneTexts, audioDir, options);
+      if (!kokoroPath) throw new Error("kokoro produced no audio");
+      result = { audioPath: kokoroPath, wordTimings: null };
+    } catch (e) {
+      console.warn("⚠️ kokoro TTS failed (" + e.message + ") — falling back to edge");
+      usedEngine = "edge";
+      result = await generateFull(fullText, fullPath, { ...options, ttsType: "edge" });
     }
-    result = { audioPath: kokoroPath, wordTimings: null };
   } else {
     try {
       result = await generateFull(fullText, fullPath, { ...options, ttsType });
