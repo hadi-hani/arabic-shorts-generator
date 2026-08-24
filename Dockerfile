@@ -12,13 +12,13 @@ FROM node:20-bookworm
 # python3 for edge-tts / faster-whisper fallback alignment.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx ffmpeg fontconfig supervisor ca-certificates \
-        fonts-noto-core fonts-noto-arabic \
+        fonts-noto-core \
         python3 python3-pip python3-venv \
     && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
 
 # Python deps: Edge TTS engine + optional whisper forced-alignment fallback.
-RUN pip3 install --no-cache-dir edge-tts faster-whisper
+RUN pip3 install --no-cache-dir --break-system-packages edge-tts faster-whisper
 
 WORKDIR /app
 
@@ -31,11 +31,12 @@ COPY backend/public/ /usr/share/nginx/html/
 RUN mkdir -p output temp data
 
 # Copy configs
-COPY backend/nginx.conf /etc/nginx/http.d/default.conf
+RUN rm -f /etc/nginx/sites-enabled/default
+COPY backend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY backend/supervisord.conf /etc/supervisord.conf
 
 # Clean up potential nginx leftover
-RUN rm -f /etc/nginx/http.d/default.conf.bak 2>/dev/null || true
+RUN rm -f /etc/nginx/conf.d/default.conf.bak 2>/dev/null || true
 
 EXPOSE 80
 

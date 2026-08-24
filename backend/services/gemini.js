@@ -69,7 +69,19 @@ async function callGemini(prompt, retries = 3) {
         }
         let text = response.data.candidates[0].content.parts[0].text.trim();
         text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        return JSON.parse(text);
+        // Extract the JSON object even if the model wrapped it in extra text
+        const _start = text.indexOf("{");
+        const _end = text.lastIndexOf("}");
+        if (_start !== -1 && _end !== -1 && _end > _start) {
+          text = text.slice(_start, _end + 1);
+        }
+        try {
+          return JSON.parse(text);
+        } catch (parseErr) {
+          const perr = new Error("GEMINI_JSON_PARSE:" + parseErr.message);
+          perr.isParse = true;
+          throw perr;
+        }
       } catch (err) {
         const status = err.response && err.response.status;
         const errMsg = (err.response && err.response.data && err.response.data.error && err.response.data.error.message) || err.message;
@@ -89,6 +101,10 @@ async function callGemini(prompt, retries = 3) {
           // Model not available — skip to next
           console.warn(`⚠️ ${model} not available (404), skipping...`);
           break;
+        } else if (err.isParse && attempt < retries) {
+          // Malformed JSON from the model — retry with a fresh sample
+          console.warn(`⚠️ ${model} returned invalid JSON – retry ${attempt}/${retries}`);
+          await new Promise(r => setTimeout(r, 1500));
         } else {
           throw new Error(errMsg);
         }
