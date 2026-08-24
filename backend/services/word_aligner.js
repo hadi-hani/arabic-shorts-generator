@@ -113,6 +113,50 @@ function timingKey(raw) {
     .trim();
 }
 
+// Minimum normalized length for a prefix-fuzzy match — shorter keys are too
+// generic in Arabic (e.g. "من"، "في") and would produce false positives.
+const FUZZY_MIN_LEN = 3;
+
+/** Prefix-fuzzy equality: whisper systematically truncates/extends Arabic word
+ *  endings ("الفيديوهات"→"الفيديو", "النطق"→"النطقي"). Accept either side as
+ *  a prefix of the other, provided the shared part is long enough to be safe. */
+function fuzzyKeyEqual(a, b) {
+  const ka = timingKey(a);
+  const kb = timingKey(b);
+  if (!ka || !kb || ka === kb) return ka && kb && ka === kb;
+  const minLen = Math.min(ka.length, kb.length);
+  if (minLen < FUZZY_MIN_LEN) return false;
+  return ka.startsWith(kb) || kb.startsWith(ka);
+}
+
+const SIMILAR_MIN_LEN = 4;
+const SIMILAR_RATIO = 0.65;
+// Pass-3 search window around the last consumed timing index.
+const SIMILAR_WINDOW_BEFORE = 1;
+const SIMILAR_WINDOW_AFTER = 3;
+
+// Compact edit-distance similarity (words are short — full DP is trivial).
+function similarRatio(a, b) {
+  const s = timingKey(a), t = timingKey(b);
+  if (!s || !t) return 0;
+  const m = s.length, n = t.length;
+  if (Math.abs(m - n) > Math.max(m, n) * (1 - SIMILAR_RATIO)) return 0;
+  let prev = new Array(n + 1), cur = new Array(n + 1);
+  for (let jj = 0; jj <= n; jj++) prev[jj] = jj;
+  for (let ii = 1; ii <= m; ii++) {
+    cur[0] = ii;
+    for (let jj = 1; jj <= n; jj++) {
+      cur[jj] = Math.min(
+        prev[jj] + 1,
+        cur[jj - 1] + 1,
+        prev[jj - 1] + (s[ii - 1] === t[jj - 1] ? 0 : 1)
+      );
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
+
 /* ── Font sizing (mirrors captions.js) ───────────────────── */
 
 function fontsizeFor(text) {
@@ -159,29 +203,93 @@ function splitLines(words, maxChars = LINE_MAX_CHARS) {
 function alignTimings(timings, tokens) {
   if (!Array.isArray(timings) || !timings.length) return null;
   const words = tokens.map((text) => ({ text, start: 0, end: 0, _matched: false }));
+  const usedTiming = new Array(timings.length).fill(false);
+
+  // ── Pass 1: exact normalized match (in order) ──
+  let matchedExact = 0;
   let j = 0;
-  let matched = 0;
   for (let i = 0; i < tokens.length; i++) {
     const key = timingKey(tokens[i]);
     if (!key) continue;
     let found = -1;
     for (let s = j; s < timings.length; s++) {
-      if (timingKey(timings[s].word) === key) {
-        found = s;
-        break;
-      }
+      if (!usedTiming[s] && timingKey(timings[s].word) === key) { found = s; break; }
     }
     if (found === -1) continue;
+    usedTiming[found] = true;
+    j = found + 1;
     const t = timings[found];
     const start = Math.max(0, typeof t.start === "number" ? t.start : 0);
     const end =
       typeof t.end === "number" ? Math.max(t.end, start) : start + 0.3;
-    words[i] = { text: tokens[i], start, end, _matched: true };
-    j = found + 1;
-    matched++;
+    words[i] = { text: tokens[i], start, end, _matched: true, _srcIdx: found };
+    matchedExact++;
   }
+
+  // ── Pass 2: prefix-fuzzy match for the survivors (still in order) ──
+  // Recovers whisper's systematic Arabic truncations/extensions instead of
+  // dropping those words to interpolation or a whole-scene even-split.
+  let matchedFuzzy = 0;
+  j = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    if (words[i]._matched) continue;
+    const key = timingKey(tokens[i]);
+    if (!key || key.length < FUZZY_MIN_LEN) continue;
+    let found = -1;
+    for (let s = j; s < timings.length; s++) {
+      if (!usedTiming[s] && fuzzyKeyEqual(timings[s].word, key)) { found = s; break; }
+    }
+    if (found === -1) continue;
+    usedTiming[found] = true;
+    j = found + 1;
+    const t = timings[found];
+    const start = Math.max(0, typeof t.start === "number" ? t.start : 0);
+    const end =
+      typeof t.end === "number" ? Math.max(t.end, start) : start + 0.3;
+    words[i] = { text: tokens[i], start, end, _matched: true, _srcIdx: found };
+    matchedFuzzy++;
+  }
+
+  // ── Pass 3: bounded edit-distance match for the rest (mid-word deletions
+  // like "تساءلت"→"تسألت"). The candidate window for an unmatched token is
+  // bounded by the timing sources of its nearest matched neighbours on both
+  // sides — correct even when the stray timing sits before later matches.
+  let matchedSimilar = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    if (words[i]._matched) continue;
+    const key = timingKey(tokens[i]);
+    if (!key || key.length < SIMILAR_MIN_LEN) continue;
+
+    let prevSrc = -1, nextSrc = timings.length;
+    for (let p = i - 1; p >= 0; p--) {
+      if (words[p]._matched) { prevSrc = words[p]._srcIdx ?? -1; break; }
+    }
+    for (let nx = i + 1; nx < tokens.length; nx++) {
+      if (words[nx]._matched) { nextSrc = words[nx]._srcIdx ?? timings.length; break; }
+    }
+    const lo = Math.max(0, prevSrc === -1 ? 0 : prevSrc + 1);
+    const hi = Math.min(timings.length - 1, nextSrc - 1);
+
+    let found = -1, bestRatio = 0;
+    for (let s = lo; s <= hi; s++) {
+      if (usedTiming[s]) continue;
+      const ratio = similarRatio(timings[s].word, key);
+      if (ratio >= SIMILAR_RATIO && ratio > bestRatio) { found = s; bestRatio = ratio; }
+    }
+    if (found === -1) continue;
+    usedTiming[found] = true;
+    const t = timings[found];
+    const start = Math.max(0, typeof t.start === "number" ? t.start : 0);
+    const end =
+      typeof t.end === "number" ? Math.max(t.end, start) : start + 0.3;
+    words[i] = { text: tokens[i], start, end, _matched: true, _srcIdx: found };
+    matchedSimilar++;
+  }
+
+  const matched = matchedExact + matchedFuzzy + matchedSimilar;
   if (!matched) return null;
 
+  // Interpolate unmatched words between their nearest matched neighbours.
   const matchedIdx = words.map((w, i) => (w._matched ? i : -1)).filter((i) => i >= 0);
   for (let i = 0; i < words.length; i++) {
     if (words[i]._matched) continue;
@@ -205,13 +313,16 @@ function alignTimings(timings, tokens) {
     }
   }
 
+  // Monotonic starts + guaranteed minimum display duration (no flashing
+  // zero-duration SRT entries).
+  const MIN_WORD_DUR = 0.08;
   let prev = -Infinity;
   for (const w of words) {
     if (w.start < prev) w.start = prev;
-    if (w.end < w.start) w.end = w.start;
+    if (w.end < w.start + MIN_WORD_DUR) w.end = w.start + MIN_WORD_DUR;
     prev = w.start;
   }
-  return { words, matched };
+  return { words, matched, matchedExact, matchedFuzzy, matchedSimilar };
 }
 
 function evenSplitBySentence(tokens, duration) {
@@ -242,7 +353,16 @@ function buildWordList(timings, tokens, opts) {
   const n = tokens.length;
   if (!n) return [];
   const aligned = alignTimings(timings, tokens);
-  if (aligned && aligned.matched / n >= 0.7) return aligned.words;
+  if (aligned && aligned.matched / n >= 0.7) {
+    if (opts && opts.debug) {
+      console.log(`[align] ${aligned.matched}/${n} matched (exact=${aligned.matchedExact}, fuzzy=${aligned.matchedFuzzy}, similar=${aligned.matchedSimilar})`);
+    }
+    return aligned.words;
+  }
+  if (opts && opts.debug) {
+    const ratio = aligned ? (aligned.matched / n).toFixed(2) : "0";
+    console.warn(`[align] low match ratio ${ratio} < 0.7 → falling back to even split by sentence`);
+  }
   const duration =
     opts.duration > 0 ? opts.duration : n / (opts.wordsPerSecond || 2.6);
   return evenSplitBySentence(tokens, duration);
