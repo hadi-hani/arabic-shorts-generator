@@ -172,6 +172,14 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
     platforms: script.platforms || {}
   };
 
+  result.captions = {};
+  for (const [platform, data] of Object.entries(result.platforms)) {
+    result.captions[platform] = { caption: data.caption || data.description || "" };
+  }
+  if (result.ytTitle) {
+    result.captions.yt = { ...(result.captions.yt || {}), title: result.ytTitle };
+  }
+
   setJob(jobId, result);
   return result;
 }
@@ -245,15 +253,7 @@ async function videoRouteHandler(req, res) {
     const result = await runPipeline(topic, jobId, targetPlatforms, options);
 
     const base = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
-    const captions = {};
-    for (const [platform, data] of Object.entries(result.platforms)) {
-      captions[platform] = {
-        caption:  data.caption || data.description || ""
-      };
-    }
-    if (result.ytTitle) {
-      captions.yt = { ...(captions.yt || {}), title: result.ytTitle };
-    }
+    const captions = result.captions;
 
     return res.json({
       jobId,
