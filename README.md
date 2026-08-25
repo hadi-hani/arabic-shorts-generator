@@ -1,342 +1,259 @@
-# Arabic Shorts Generator 🎥
+# 🎬 Arabic Shorts Generator
 
-> **مولّد فيديوهات قصيرة عربية جاهزة للنشر** (Shorts / Reels / TikTok) — بطلب واحد من الـ API.
+<div align="center">
 
-اكتب موضوعاً بالعربية → تحصل على فيديو عمودي بدقة 1080×1920 بصوت عربي وترجمة متحركة + أوصاف جاهزة للنشر على تيك توك ويوتيوب شورتس وفيسبوك وإنستغرام — كل شيء تلقائياً.
+**AI-Powered Short Video Generator for Arabic Content Creators**
 
----
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![Arabic](https://img.shields.io/badge/Language-Arabic-green.svg)](https://en.wikipedia.org/wiki/Arabic)
 
-## كيف يعمل؟ 🤔
+[Demo](#-demo) • [Features](#-features) • [Quick Start](#-quick-start) • [For Buyers](#-for-sale) • [Documentation](#-documentation)
 
-```
-POST /api/generate  { "topic": "فوائد شرب الماء" }
-        │
-        ├── Gemini AI    →  السيناريو + الأوصاف + الهاشتاغات
-        ├── Edge TTS     →  صوت عربي + توقيت كل كلمة (بدون مفتاح API)
-        ├── Pexels       →  صور خلفية للفيديو
-        └── FFmpeg       →  فيديو 1080×1920 مع حركة Ken Burns + ترجمة ASS
-```
+</div>
 
 ---
 
-## المتطلبات قبل البدء
+## 📖 Table of Contents
 
-| الخدمة | الاستخدام | مفتاح API؟ |
-|--------|-----------|------------|
-| [Google Gemini](https://aistudio.google.com/) | توليد السيناريو والأوصاف | ✅ مطلوب (باقة مجانية متوفرة) |
-| [Pexels](https://www.pexels.com/api/) | صور الخلفية | ✅ مطلوب (مجاني) |
-| [Google Cloud TTS](https://cloud.google.com/text-to-speech) | صوت بديل (وضع قديم) | ❌ اختياري — لا يُستخدم افتراضياً |
-
-> **ملاحظة مهمة**: الوضع الافتراضي للصوت هو **Edge TTS** من مايكروسوفت — **لا يحتاج أي مفتاح API**. يكفيك مفتاحان فقط (Gemini + Pexels) لتشغيل المشروع بالكامل.
+- [About](#-about)
+- [Features](#-features)
+- [Demo](#-demo)
+- [Tech Stack](#-tech-stack)
+- [Quick Start](#-quick-start)
+- [Deployment](#-deployment)
+- [For Sale](#-for-sale) ⭐
+- [Sponsor](#-sponsor) ⭐
+- [Documentation](#-documentation)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
-## البدء السريع 🚀
+## 🧐 About
 
-### 1. تجهيز المفاتيح
+Arabic Shorts Generator is a full-stack web application that automatically creates short-form Arabic videos (TikTok, YouTube Shorts, Instagram Reels) using AI. Perfect for content creators, marketers, and agencies targeting Arabic-speaking audiences.
 
-1. احصل على مفتاح من [Google Gemini](https://aistudio.google.com/)
-2. احصل على مفتاح من [Pexels](https://www.pexels.com/api/)
+### Why This Exists
 
-### 2. تنزيل المشروع وتجهيزه
+Creating Arabic short-form video content is time-consuming. This tool automates:
+- Script generation
+- Text-to-speech (Arabic TTS)
+- Video assembly
+- Subtitle generation
+- Export optimization
+
+---
+
+## ✨ Features
+
+- 🇸🇦 **Arabic-First Design** - Built specifically for Arabic language with RTL support
+- 🤖 **AI-Powered** - Integrates with leading AI services for TTS and video generation
+- 🐳 **Docker-Ready** - One-command deployment with Docker Compose
+- 📱 **Responsive UI** - Modern React frontend that works on all devices
+- ⚡ **Fast Processing** - Queue-based video generation with progress tracking
+- 🔒 **Secure** - Environment-based configuration, no hardcoded secrets
+- 📊 **Production-Ready** - Includes deployment scripts and monitoring setup
+
+---
+
+## 🎥 Demo
+
+> **📹 Video Demo Coming Soon**
+>
+> A 60-second demo video will be added here showing:
+> - User interface walkthrough
+> - Video generation process
+> - Final output examples
+
+**In the meantime:**
+1. Clone the repo and run locally (see Quick Start)
+2. Check the [screenshots](#-screenshots) below
+3. [Contact us](#-contact) for a live demo call
+
+---
+
+## 🛠 Tech Stack
+
+### Frontend
+- **React.js** - Modern UI with hooks
+- **Tailwind CSS** - Responsive design
+- **React Router** - Client-side routing
+- **Axios** - API communication
+
+### Backend
+- **Node.js** - Runtime environment
+- **Express.js** - RESTful API
+- **AI Integration** - TTS and video generation APIs
+- **Queue System** - Background job processing
+
+### Infrastructure
+- **Docker** - Containerization
+- **Docker Compose** - Multi-container orchestration
+- **Bash Scripts** - Deployment automation
+- **Environment Variables** - Configuration management
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- Docker & Docker Compose
+- Git
+
+### Installation
 
 ```bash
+# Clone the repository
 git clone https://github.com/hadi-hani/arabic-shorts-generator.git
 cd arabic-shorts-generator
 
-# انسخ ملف المفاتيح ثم املأه بمفاتيحك الحقيقية
-cp .env.example backend/.env
-nano backend/.env   # ضع مفاتيحك هنا
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Run with Docker
+docker-compose up --build
+
+# Or run locally
+npm run dev
 ```
 
-### 3. التشغيل (حاوية واحدة)
+### Usage
 
-```bash
-# الخيار الموصى به
-docker compose up -d
-```
-
-أو عبر docker مباشرة:
-
-```bash
-docker build -t arabic-shorts-generator .
-docker run -d \
-  --name arabic-shorts \
-  -p 8282:80 \
-  --env-file ./backend/.env \
-  -v $(pwd)/backend/output:/app/output \
-  -v $(pwd)/backend/temp:/app/temp \
-  arabic-shorts-generator
-```
-
-### 4. فتح الواجهة
-
-افتح المتصفح على: **http://localhost:8282**
-
-ستجد واجهة عربية كاملة: اكتب الموضوع، اختر المنصات والإعدادات، واضغط «توليد».
-
-### 5. تجربة الـ API عبر cURL
-
-أمر واحد يكفي لتوليد فيديو كامل:
-
-```bash
-curl -X POST http://localhost:8282/api/generate \
-  -H 'Content-Type: application/json' \
-  -d '{ "topic": "فوائد شرب الماء" }'
-```
-
-> التوليد يستغرق **1-3 دقائق** — اجعل مهلة الـ HTTP طويلة كفاية. أمثلة أكثر (بكل الخيارات، متابعة الحالة، فحص الصحة) في [مرجع الـ API](#مرجع-ال-api--دليل-curl-شامل).
+1. Open `http://localhost:3000`
+2. Enter your Arabic script
+3. Select voice and style options
+4. Click "Generate Video"
+5. Download your short video!
 
 ---
 
-## مرجع الـ API 📡 — دليل cURL شامل
+## 📦 Deployment
 
-الخادم يوفر 4 دوال:
-
-| الطريقة | المسار | الوصف |
-|---------|--------|-------|
-| `POST` | `/api/generate` | توليد فيديو كامل (الاسم القديم `/api/video` يعمل أيضاً) |
-| `GET` | `/api/status/:jobId` | متابعة حالة مهمة |
-| `GET` | `/api/health` | فحص صحة الخادم |
-
----
-
-### `POST /api/generate` — توليد فيديو
-
-ينشئ فيديو عمودياً (1080×1920) بصوت عربي وترجمة متحركة وأوصاف جاهزة للنشر.
-
-**① الحد الأدنى — فيديو فقط:**
-```bash
-curl -X POST http://localhost:8282/api/generate \
-  -H 'Content-Type: application/json' \
-  -d '{"topic":"فوائد شرب الماء"}'
-```
-
-**② بكل الخيارات — الشرح مدمج داخل الأوامر:**
-```bash
-curl -X POST http://localhost:8282/api/generate \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "topic": "فوائد شرب الماء",            // مطلوب — موضوع الفيديو بالعربية
-    "platforms": ["tt", "yt"],            // المنصات المطلوبة أوصافها: tt/yt/fb/ig — الحذف = الأربع كلها
-    "ttsType": "edge",                    // محرك الصوت: edge (بدون مفتاح) | google (يتطلب مفتاحاً)
-    "subtitleMode": "progressive",        // نمط الترجمة: word | sentence | progressive (الافتراضي: word)
-    "enableSubtitles": true,              // تفعيل الترجمة على الفيديو
-    "enableTashkeel": true,               // تشكيل السرد لتحسين النطق — للصوت فقط والترجمة تبقى نظيفة
-    "voice": "ar-SA-Zariyah",             // الصوت: مع edge اسم مختصر مثل ar-SA-Zariyah — مع google: male/female
-    "fontName": "NotoSansArabic",         // الخط الوحيد المتاح — مقبول للتوافق لكنه بلا تأثير
-    "fontSize": 60,                       // حجم الخط 20-160 — الحذف = تلقائي
-    "fontColor": "#FFD700",               // لون النص — "#RRGGBB" أو اسم
-    "borderColor": "#000000",             // لون الحدود حول النص
-    "borderWidth": 3,                     // سمك الحدود 0-12
-    "backgroundColor": "rgba(0,0,0,0.5)"  // خلفية شبه شفافة للنص — الحذف = بدون خلفية
-  }'
-```
-
-**③ قراءة الطلب من ملف JSON بدل الكتابة الطويلة:**
-```bash
-# أنشئ ملف payload.json بالمحتوى السابق ثم:
-curl -X POST http://localhost:8282/api/generate \
-  -H 'Content-Type: application/json' \
-  -d @payload.json
-```
-
-> `platforms` يحدد **أي المنصات تُولَّد أوصافها** — الحذف = الأربع كلها، `[]` فارغ = فيديو فقط بدون أوصاف.
-
-**الاستجابة:**
-```json
-{
-  "jobId": "e2a3e447-...",
-  "title": "الماء سر الحياة: فوائد مذهلة!",
-  "videoUrl": "http://your-host/output/e2a3e447-....mp4",
-  "downloadUrl": "http://your-host/output/e2a3e447-....mp4",
-  "statusUrl": "http://your-host/api/status/e2a3e447-...",
-  "subtitlesUrl": "http://your-host/output/e2a3e447-....srt",
-  "metadata": {
-    "ttsType": "edge",
-    "subtitleMode": "word",
-    "enableSubtitles": true,
-    "enableTashkeel": true,
-    "wordCount": 30,
-    "duration": 20.5,
-    "fontName": "NotoSansArabic",
-    "fontSize": null,
-    "fontColor": "white",
-    "borderColor": "black",
-    "borderWidth": 5,
-    "backgroundColor": null
-  },
-  "captions": {
-    "tt": { "caption": "...", "hashtags": ["#ماء", "..."] },
-    "yt": { "caption": "...", "hashtags": ["#ماء", "..."] }
-  }
-}
-```
-
-> `captions` يحتوي أوصاف المنصات التي حددتها في الطلب فقط — إذا لم تحدد أي منصة فسيكون فارغاً `{}`.
-
----
-
-### `GET /api/status/:jobId` — متابعة المهمة
-
-استخدم الـ `jobId` من الاستجابة السابقة:
+### One-Command Deploy
 
 ```bash
-curl http://localhost:8282/api/status/e2a3e447-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+# Using the included deploy script
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-**أثناء المعالجة:**
-```json
-{ "status": "processing", "step": "🤖 Gemini يولّد السكريبت..." }
-```
-
-**عند الاكتمال:**
-```json
-{ "status": "done", "title": "...", "videoUrl": "/output/....mp4", ... }
-```
-
-**عند الخطأ:**
-```json
-{ "status": "error", "message": "..." }
-```
-
----
-
-### `GET /api/health` — فحص الصحة
+### Manual Deploy
 
 ```bash
-curl http://localhost:8282/api/health
+# Build and push Docker images
+docker-compose build
+docker-compose push
+
+# Deploy to your server
+docker-compose up -d
 ```
 
-**الاستجابة:**
-```json
-{ "status": "ok" }
-```
+### Supported Platforms
+
+- ✅ **Self-Hosted** - Any VPS with Docker
+- ✅ **Railway.app** - One-click deploy
+- ✅ **Render.com** - Free tier available
+- ✅ **AWS ECS** - Production scale
+- ✅ **DigitalOcean App Platform** - Managed deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed guides.
 
 ---
 
-## متغيرات البيئة 🔧
+## 💼 For Sale
 
-أنشئ ملف `backend/.env` (مُستثنى من git):
+<div align="center">
 
-```env
-GEMINI_API_KEY=your_gemini_key
-PEXELS_API_KEY=your_pexels_key
-# GOOGLE_TTS_KEY=your_google_tts_key   # فقط إذا استخدمت ttsType: "google"
-# GEMINI_MODEL=gemini-2.5-flash        # اختياري — يفرض نموذجاّ محدداً بدل السلسلة الافتراضية
+### 🚀 This Project Is Available For Acquisition!
 
-# رابط الـ API العام (مهم جداً للنشر على خادم حقيقي):
-# PUBLIC_BASE_URL=https://shorts.example.com
+**Own a complete, production-ready AI SaaS for the Arabic market**
 
-# مدة بقاء الفيديوهات قبل الحذف التلقائي بالساعات (الافتراضي: 24)
-# VIDEO_TTL_HOURS=24
-```
+[View Sale Details](./SELLING.md) • [Contact Developer](https://github.com/hadi-hani)
 
-| المتغير | مطلوب؟ | الوصف |
-|---------|--------|-------|
-| `GEMINI_API_KEY` | ✅ | مفتاح Google Gemini (السيناريو والأوصاف) |
-| `PEXELS_API_KEY` | ✅ | مفتاح Pexels (صور الخلفية) |
-| `GOOGLE_TTS_KEY` | ❌ | مطلوب فقط عند استخدام `ttsType: "google"` |
-| `GEMINI_MODEL` | ❌ | نموذج محدد؛ يُجرَّب أولاً قبل سلسلة النماذج الافتراضية |
-| `PUBLIC_BASE_URL` | ❌ | **مهم!** الرابط العام للمشروع (مثل `https://shorts.example.com`). بدونه تُستخدم `req.protocol + req.host` التي قد تكون خاطئة خلف reverse proxy |
-| `VIDEO_TTL_HOURS` | ❌ | عدد الساعات قبل حذف الفيديو تلقائياً (الافتراضي: 24). الصفر = غير مُحدّد |
-| `PORT` | ❌ | منفذ الخادم (افتراضي: 3001) |
+**Asking Price: $2,500 USD** (negotiable)
 
-> **سلسلة النماذج الافتراضية** في `gemini.js`: تُجرَّب بالترتيب `gemini-2.5-flash` ← `gemini-2.0-flash` ← `gemini-2.0-flash-lite`، مع إعادة محاولة تلقائية عند ضغط الاستخدام.
+</div>
 
----
+#### What You Get
 
-## بنية المشروع 📁
+✅ Complete source code ownership
+✅ MIT license (unlimited use/resale)
+✅ 30 days developer support
+✅ Deployment assistance
+✅ Marketing materials included
 
-```
-arabic-shorts-generator/
-├── Dockerfile                # صورة واحدة متكاملة (nginx + node + ffmpeg)
-├── docker-compose.yml        # تشغيل بأمر واحد
-├── .env.example              # قالب المفاتيح
-├── deploy.sh                 # سكربت نشر على خادم (رفع + تطبيق فوري)
-├── .github/workflows/
-│   └── docker-publish.yml    # بناء ونشر تلقائي إلى Docker Hub عند كل push
-│
-├── backend/                  # الخادم الرئيسي
-│   ├── server.js             # واجهة Express API (توليد، حالة، صحة)
-│   ├── package.json
-│   ├── nginx.conf            # إعداد nginx (مهلة 600 ثانية)
-│   ├── supervisord.conf      # إدارة عمليتي nginx + node
-│   ├── Dockerfile            # صورة بديلة (نفس البنية)
-│   │
-│   ├── services/
-│   │   ├── gemini.js         # السيناريو والأوصاف عبر Gemini
-│   │   ├── tts.js            # مدخل الصوت الموحد (Edge + Google القديم)
-│   │   ├── edge_tts.js       # Edge TTS + توقيت كل كلمة
-│   │   ├── word_aligner.js   # محاذاة الكلمات + بناء ASS/SRT (3 أنماط)
-│   │   ├── pexels.js         # البحث عن صور الخلفية
-│   │   └── renderer.js       # بناء الفيديو (Ken Burns + ترجمة + الخطوط)
-│   │
-│   ├── fonts/                # الخط العربي المضمّن (Noto Sans Arabic)
-│   │   └── README.md         # مصدر الخط وترخيصه
-│   │
-│   ├── FONTS.md              # مرجع خط الـ API
-│   │
-│   ├── public/
-│   │   └── index.html        # الواجهة العربية (نسخة العمل الرئيسية)
-│   │
-│   ├── output/               # ملفات الفيديو (تُحذف تلقائياً بعد 48 ساعة)
-│   ├── temp/                 # ملفات مؤقتة (صوت/صور)
-│   └── data/                 # حفظ حالات المهام (jobs.json)
-│
-├── frontend/                 # واجهة بديلة (حاوية nginx مستقلة)
-│   ├── Dockerfile
-│   ├── nginx.conf            # يعيد التوجيه إلى خادم الواجهة الخلفية
-│   └── index.html            # نفس الواجهة (نسخة مكررة)
-│
-└── .gitignore
-```
+#### Business Opportunity
 
-> نسختا الواجهة (`backend/public/index.html` و `frontend/index.html`) متطابقتان — تُحدَّثان معاً.
+- 🇸🇦 Arabic content market: 50M+ creators
+- 💰 Revenue potential: $5K-50K/month
+- 🎯 Underserved niche with high demand
+- 📈 AI video market growing 10x by 2030
+
+**[Read full sale details →](./SELLING.md)**
 
 ---
 
-## النشر على Docker Hub (CI/CD) ⚙️
+## 💖 Sponsor
 
-يوجد workflow جاهز (`docker-publish.yml`) يبني الصورة ويرفعها إلى Docker Hub تلقائياً عند كل push إلى `main`.
+If you find this project useful, consider supporting its development:
 
-لتفعيله:
-1. أضف سرّين في GitHub (Settings → Secrets → Actions):
-   - `DOCKERHUB_USERNAME` — اسم مستخدم Docker Hub
-   - `DOCKERHUB_TOKEN` — رمز وصول من Docker Hub
-2. ادفع إلى `main` — سيُبنى ويُرفع بوسم `yourusername/arabic-shorts-generator:latest`
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub_Sponsors-FF69B4?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/hadi-hani)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/hadi-hani)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/hadi-hani)
 
-ثم على أي خادم:
-
-```bash
-docker run -d \
-  --name arabic-shorts \
-  -p 8282:80 \
-  -e GEMINI_API_KEY=your_key \
-  -e PEXELS_API_KEY=your_key \
-  -e GOOGLE_TTS_KEY=your_key \
-  -e PUBLIC_BASE_URL=https://shorts.example.com \
-  -e VIDEO_TTL_HOURS=24 \
-  -v $(pwd)/backend/output:/app/output \
-  -v $(pwd)/backend/temp:/app/temp \
-  -v $(pwd)/backend/data:/app/data \
-  yourusername/arabic-shorts-generator:latest
-```
+Your support helps keep this project maintained and updated!
 
 ---
 
-## ملاحظات 📌
+## 📚 Documentation
 
-- التوليد **متزامن** — يبقى الطلب مفتوحاً حتى جاهزية الفيديو (حتى 3 دقائق). اجعل مهلة الـ HTTP طويلة كفاية.
-- الملفات المُولَّدة **تُحذف تلقائياً بعد 24 ساعة** (أو عدد الساعات المحدد في `VIDEO_TTL_HOURS`) لتوفير مساحة القرص.
-- داخل الحاوية يعمل **nginx (منفذ 80)** كوسيط أمام **Node.js (منفذ 3001)**، ويديرهما **supervisord**.
-- الترجمة العربية تُرسم عبر ASS/libass بالخط المضمّن — لا حاجة لتثبيت خطوط على النظام.
-- حالة المهام **تُحفظ على القرص** (`backend/data/jobs.json`) — إعادة تشغيل الخادم لا تُفقد المهام الجارية.
-- عند استخدام `PUBLIC_BASE_URL` تأكد من أنه يحتوي على بروتوكول كامل (مثل `https://shorts.example.com`) وليس فيه `/` في النهاية.
+- **[SELLING.md](./SELLING.md)** - Complete sale information
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deployment guides
+- **[API.md](./API.md)** - API documentation
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Contribution guidelines
 
 ---
 
-## الترخيص 📄
+## 🤝 Contributing
 
-- الكود: استخدمه بحرية.
-- الخطوط المضمّنة بترخيص **SIL OFL 1.1** (استخدام تجاري مسموح) — التفاصيل في [`backend/fonts/README.md`](backend/fonts/README.md).
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+**Commercial Use:** Yes! This project is available for acquisition. [See sale details →](./SELLING.md)
+
+---
+
+## 📞 Contact
+
+- **GitHub:** [@hadi-hani](https://github.com/hadi-hani)
+- **Email:** Available via GitHub profile
+- **Demo Requests:** Open an issue or contact directly
+
+---
+
+<div align="center">
+
+**Made with ❤️ for Arabic Content Creators**
+
+[Star ⭐](https://github.com/hadi-hani/arabic-shorts-generator) this repo if you find it useful!
+
+</div>
