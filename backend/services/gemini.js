@@ -121,7 +121,7 @@ Also generate platform-specific captions for the following platforms: ${platform
 For each platform return a JSON key matching the platform code with this structure:
 ${platforms.map(p => {
   const cfg = PLATFORM_CONFIGS[p];
-  return `"${p}": { "caption": "Full ${cfg.name} caption in Arabic, max ${cfg.maxChars} chars, ${cfg.tone}, ${cfg.emojiStyle}, include ${cfg.hashtagCount} relevant Arabic/English hashtags, end with CTA like '${cfg.ctaExample}'" }`;
+      return `"${p}": { "caption": "Full ${cfg.name} caption in Arabic, max ${cfg.maxChars} chars, ${cfg.tone}, ${cfg.emojiStyle}. The caption MUST end with ${cfg.hashtagCount} relevant Arabic/English hashtags (e.g. #tag1 #tag2), i.e. description then hashtags. End with CTA like '${cfg.ctaExample}'" }`;
 }).join(",\n")}
 `
     : "";
@@ -142,7 +142,7 @@ Rules:
 - Diacritize ALL words fully using fatha (َ), damma (ُ), kasra (ِ), tanween (ً، ٌ، ٍ) and sukun (ْ) wherever grammatically correct.
 - Do NOT leave words undiacritized; full vocalization is required for correct pronunciation.
 - Example: instead of "ذهب الرجل الى المدرسة وقرأ الكتاب" write "ذَهَبَ الرَّجُلُ إِلَى المَدْرَسَةِ وَقَرَأَ الكِتَابَ".
-- Do NOT add any tashkeel to "title", "caption", "searchQuery", or platform captions.`
+- Do NOT add any tashkeel to "title", "ytTitle", "caption", "searchQuery", or platform captions.`
     : "";
 
   const prompt = `You are an expert Arabic short video content creator and social media expert.
@@ -160,7 +160,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       "duration": 7
     }
   ],
-  "hashtags": ["#tag1", "#tag2"]${platformsJsonExample}
+  "ytTitle": "YouTube-optimized SEO title in Arabic (max 100 chars)"${platformsJsonExample}
 }
 ${tashkeelBlock}
 IMPORTANT: Split the narration into SHORT sentences — each sentence (5-8 words max) becomes its own scene. Create AS MANY scenes as needed to cover the topic thoroughly (between 8 and 20 scenes). Aim for a TOTAL video length of 45-90 seconds (roughly 6-9 seconds per scene). Do NOT artificially limit the number of scenes to keep the video short — let the content dictate the length. Each scene narration must be a single short sentence in Arabic.`;

@@ -163,6 +163,7 @@ async function runPipeline(topic, jobId, platforms, options = {}) {
   const result = {
     status: "done",
     title: script.title,
+    ytTitle: script.ytTitle,
     videoUrl: `/output/${jobId}.mp4`,
     videoPath: finalPath,
     subtitlesUrl: srtPath ? `/output/${jobId}.srt` : null,
@@ -247,9 +248,11 @@ async function videoRouteHandler(req, res) {
     const captions = {};
     for (const [platform, data] of Object.entries(result.platforms)) {
       captions[platform] = {
-        caption:  data.caption || data.description || "",
-        hashtags: data.hashtags || []
+        caption:  data.caption || data.description || ""
       };
+    }
+    if (result.ytTitle) {
+      captions.yt = { ...(captions.yt || {}), title: result.ytTitle };
     }
 
     return res.json({

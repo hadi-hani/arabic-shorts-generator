@@ -769,16 +769,13 @@ function showResult(d) {
     capsHtml = '<div class="caps-wrap"><div class="caps-head">📢 الأوصاف والكابشنات</div><div class="caps-grid">';
     plats.forEach(function(p) {
       var cap = d.captions[p];
-      var tags = (cap.hashtags || []).slice(0,5).map(function(h){
-        return '<span class="cap-tag">' + escHtml(h) + '</span>';
-      }).join('');
       capsHtml += '<div class="cap-card">' +
         '<div class="cap-head"><span class="cap-pi" style="background:' + (platBgCol[p]||'#111') + '">' + (platIcons[p]||'') + '</span>' +
         '<span class="cap-name" style="color:' + (platColors[p]||'var(--text)') + '">' + escHtml(platNames[p]||p) + '</span></div>' +
         '<div class="cap-body">' +
         '<div class="cap-text">' + escHtml(cap.caption || cap.text || '') + '</div>' +
+        (p === 'yt' && cap.title ? '<div class="cap-cta">🎬 عنوان يوتيوب: ' + escHtml(cap.title) + '</div>' : '') +
         (cap.cta ? '<div class="cap-cta">' + escHtml(cap.cta) + '</div>' : '') +
-        (tags ? '<div class="cap-tags">' + tags + '</div>' : '') +
         '</div>' +
         '<div class="cap-foot"><button class="copy-btn" onclick="copyCap(this,' + "'" + p + "'" + ',event)">نسخ</button></div>' +
         '</div>';
@@ -787,9 +784,10 @@ function showResult(d) {
   }
 
   var videoSrc = videoUrl || d.videoPath || d.videoUrl || '';
+  var videoTitle = d.title ? escHtml(d.title) : '';
   setOutput('<div class="result-card">' +
     '<div class="result-ok">✓ اكتمل التوليد!</div>' +
-    '<div class="result-title">الفيديو جاهز للتحميل والنشر</div>' +
+    (videoTitle ? '<div class="result-title">🎬 ' + videoTitle + '</div>' : '<div class="result-title">الفيديو جاهز للتحميل والنشر</div>') +
     (videoSrc ? '<video src="' + escHtml(videoSrc) + '" controls playsinline></video>' : '') +
     (videoSrc ? '<button id="dlbtn" onclick="dlVideo()">⬇ تحميل الفيديو</button>' : '') +
     capsHtml +
@@ -812,7 +810,7 @@ function copyCap(btn, plat, e) {
   e.stopPropagation();
   var cap = (window._captionsData || {})[plat];
   if (!cap) return;
-  var full = (cap.caption || cap.text || '') + (cap.hashtags && cap.hashtags.length ? '\n' + cap.hashtags.join(' ') : '');
+  var full = (cap.caption || cap.text || '');
   navigator.clipboard.writeText(full).then(function(){
     btn.textContent = '✓ تم النسخ'; btn.classList.add('copied');
     setTimeout(function(){ btn.textContent = 'نسخ'; btn.classList.remove('copied'); }, 1800);
